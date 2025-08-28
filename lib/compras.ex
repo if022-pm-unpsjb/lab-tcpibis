@@ -1,7 +1,11 @@
 defmodule Libremarket.Compras do
 
   def comprar() do
-    Libremarket.Infracciones.Server.detectar_infraccion(1)
+    infraccion = Libremarket.Infracciones.Server.detectar_infraccion(1)
+    if (not infraccion) do
+      Libremarket.Pagos.Server.autorizar_pago()
+    end
+    
   end
 
 end
