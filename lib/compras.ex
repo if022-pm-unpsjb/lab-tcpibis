@@ -1,12 +1,53 @@
 defmodule Libremarket.Compras do
 
   def comprar() do
-    infraccion = Libremarket.Infracciones.Server.detectar_infraccion(1)
-    if (not infraccion) do
-      Libremarket.Pagos.Server.autorizar_pago()
-    end
-    
+  #selecciona producto
+  productos_disponibles = Libremarket.Ventas.Server.productos_disponibles()
+  producto = Libremarket.Ventas.Server.seleccionar_producto(productos_disponibles)
+  #selecciona forma de entrega(llamar a calcular costo)
+  envio = Enum.random([:retira, :correo])
+  if envio == :correo do
+    costo_envio = Libremarket.Envio.Server.calcular_costo_envio()
+    IO.inspect(costo_envio, label: "Costo de envío")
   end
+  #seleccionar medio de pago
+  pago = Libremarket.Pagos.Server.elegir_metodo_pago()
+  #confirmar compra
+  #reservar producto
+  stock = Libremarket.Ventas.Server.reservar_producto(producto)
+  if (stock === {:error, :sin_stock}) do
+    IO.puts("No se pudo reservar el producto #{producto.nombre} por falta de stock")
+    {:error, :sin_stock}
+  else
+    infraccion = Libremarket.Infracciones.Server.detectar_infraccion(1)
+    if infraccion do
+      IO.inspect(infraccion, label: "Se detectó una infracción")
+      #IO.puts("Infracción detectada: #{inspect(infraccion)}")
+      Libremarket.Ventas.Server.liberar_reserva(producto)
+      :error
+    else
+      pago_ok = Libremarket.Pagos.Server.autorizar_pago()
+
+      if not pago_ok do
+        IO.inspect(pago_ok, label: "Error pago rechazado")
+        #IO.puts("Infracción detectada: #{inspect(infraccion)}")
+        Libremarket.Ventas.Server.liberar_reserva(producto)
+        :error
+      else
+
+        #si pago ok enviar producto
+      if envio == :correo do
+        Libremarket.Envio.Server.agendar_envio()
+        Libremarket.Envio.Server.enviar_producto()
+      end
+
+      IO.puts("Compra exitosa del producto #{producto.nombre} con pago #{pago} y envio #{envio}")
+      {:ok, %{producto: producto, pago: pago, envio: envio}}
+
+    end
+  end
+end
+end
 
 end
 

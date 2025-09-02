@@ -5,6 +5,10 @@ defmodule Libremarket.Pagos do
     probabilidad<70
   end
 
+  def elegir_metodo_pago()do
+    pago = Enum.random([:efectivo, :transferencia, :td, :tc])
+  end
+
 end
 
 defmodule Libremarket.Pagos.Server do
@@ -27,6 +31,10 @@ defmodule Libremarket.Pagos.Server do
     GenServer.call(pid, :autorizar_pago)
   end
 
+  def elegir_metodo_pago(pid \\ __MODULE__) do
+    GenServer.call(pid, :elegir_metodo_pago)
+  end
+
   # Callbacks
 
   @doc """
@@ -38,11 +46,18 @@ defmodule Libremarket.Pagos.Server do
   end
 
   @doc """
-  Callback para un call :comprar
+  Callbacks
   """
   @impl true
   def handle_call(:autorizar_pago, _from, state) do
     result = Libremarket.Pagos.autorizar_pago()
+    {:reply, result, state}
+  end
+
+
+  @impl true
+  def handle_call(:elegir_metodo_pago, _from, state) do
+    result = Libremarket.Pagos.elegir_metodo_pago()
     {:reply, result, state}
   end
 
