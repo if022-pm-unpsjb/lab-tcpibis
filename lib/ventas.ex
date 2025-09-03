@@ -1,36 +1,45 @@
+
 defmodule Libremarket.Ventas do
 
   def productos_disponibles() do
-    [
-        %{nombre: "Zapatillas Adadis", cantidad: :rand.uniform(10)},
-        %{nombre: "Piluso bokita", cantidad: :rand.uniform(10)},
-        %{nombre: "Don satur saladas", cantidad: :rand.uniform(10)},
-        %{nombre: "Mate de calabaza", cantidad: :rand.uniform(10)},
-        %{nombre: "Pañuelo seca lagrimas", cantidad: :rand.uniform(10)},
-        %{nombre: "Gorra pumita", cantidad: :rand.uniform(10)},
-        %{nombre: "Piluso velez", cantidad: :rand.uniform(10)},
-        %{nombre: "Piluso newells", cantidad: :rand.uniform(10)},
-        %{nombre: "Piluso river", cantidad: :rand.uniform(10)},
-        %{nombre: "Taza verde", cantidad: :rand.uniform(10)}
-    ]
+    %{
+      1 => %{nombre: "Zapatillas Adadis", cantidad: :rand.uniform(10)},
+      2 => %{nombre: "Piluso bokita", cantidad: :rand.uniform(10)},
+      3 => %{nombre: "Don satur saladas", cantidad: :rand.uniform(10)},
+      4 => %{nombre: "Mate de calabaza", cantidad: :rand.uniform(10)},
+      5 => %{nombre: "Pañuelo seca lagrimas", cantidad: :rand.uniform(10)},
+      6 => %{nombre: "Gorra pumita", cantidad: :rand.uniform(10)},
+      7 => %{nombre: "Piluso velez", cantidad: :rand.uniform(10)},
+      8 => %{nombre: "Piluso newells", cantidad: :rand.uniform(10)},
+      9 => %{nombre: "Piluso river", cantidad: :rand.uniform(10)},
+      10 => %{nombre: "Taza verde", cantidad: :rand.uniform(10)}
+    }
+
   end
 
-def liberar_reserva(producto) do
-  %{producto | cantidad: producto.cantidad + 1}
-end
-
-def reservar_producto(producto) do
-  if producto.cantidad == 0 do
-    IO.puts("ERROR NO HAY STOCK")
-    {:error, :sin_stock}
-  else
-    %{producto | cantidad: producto.cantidad - 1}
+#recibe el prodcuto pero tiene que recibir el id
+  def liberar_reserva(id, state) do
+    case state[id] do
+      nil -> {:error, :not_found}
+      %{cantidad: c} = p -> {:ok, Map.put(state, id, %{p | cantidad: c + 1})}
+    end
   end
-end
 
-def seleccionar_producto(stock_productos) do
-  Enum.random(stock_productos)
-end
+  def reservar_producto(id, state) do
+    case state[id] do
+      nil -> {:error, :not_found}
+      %{cantidad: c} = p when c > 0 -> {:ok, Map.put(state, id, %{p | cantidad: c - 1})}
+      _ -> {:error, :sin_stock}
+    end
+  end
+
+
+  def seleccionar_producto(id, state) do
+    case state[id] do
+      nil -> {:error, :not_found}
+      p -> {:ok, p}
+    end
+  end
 
 
 end
@@ -63,8 +72,8 @@ defmodule Libremarket.Ventas.Server do
     GenServer.call(pid, {:reservar_producto, producto})
   end
 
-  def seleccionar_producto(pid \\ __MODULE__, productos) do
-    GenServer.call(pid, {:seleccionar_producto, productos})
+  def seleccionar_producto(pid \\ __MODULE__, id_producto) do
+    GenServer.call(pid, {:seleccionar_producto, id_producto})
   end
 
   # Callbacks
@@ -74,7 +83,8 @@ defmodule Libremarket.Ventas.Server do
   """
   @impl true
   def init(state) do
-    {:ok, state}
+    productos = Libremarket.Ventas.productos_disponibles()
+    {:ok, productos}
   end
 
   @doc """
@@ -88,21 +98,21 @@ defmodule Libremarket.Ventas.Server do
 
   @impl true
   def handle_call({:liberar_reserva, producto}, _from, state) do
-    result = Libremarket.Ventas.liberar_reserva(producto)
-    {:reply, result, state}
+    result = Libremarket.Ventas.liberar_reserva(producto, state)
+    {:reply, result, result}
   end
 
 
   @impl true
   def handle_call({:reservar_producto, producto}, _from, state) do
-    result = Libremarket.Ventas.reservar_producto(producto)
-    {:reply, result, state}
+    result = Libremarket.Ventas.reservar_producto(producto, state)
+    {:reply, result, result}
   end
 
 
   @impl true
-  def handle_call({:seleccionar_producto, productos}, _from, state) do
-    result = Libremarket.Ventas.seleccionar_producto(productos)
+  def handle_call({:seleccionar_producto, id_producto}, _from, state) do
+    result = Libremarket.Ventas.seleccionar_producto(id_producto, state)
     {:reply, result, state}
   end
 

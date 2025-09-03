@@ -5,10 +5,6 @@ defmodule Libremarket.Pagos do
     probabilidad<70
   end
 
-  def elegir_metodo_pago()do
-    pago = Enum.random([:efectivo, :transferencia, :td, :tc])
-  end
-
 end
 
 defmodule Libremarket.Pagos.Server do

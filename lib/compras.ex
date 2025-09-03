@@ -1,17 +1,12 @@
 defmodule Libremarket.Compras do
 
-  def comprar() do
+  def comprar(id_producto, forma_envio, forma_pago) do
   #selecciona producto
-  productos_disponibles = Libremarket.Ventas.Server.productos_disponibles()
-  producto = Libremarket.Ventas.Server.seleccionar_producto(productos_disponibles)
-  #selecciona forma de entrega(llamar a calcular costo)
-  envio = Enum.random([:retira, :correo])
-  if envio == :correo do
+  producto = Libremarket.Ventas.Server.seleccionar_producto(id_producto)
+  if forma_envio == :correo do
     costo_envio = Libremarket.Envio.Server.calcular_costo_envio()
     IO.inspect(costo_envio, label: "Costo de envío")
   end
-  #seleccionar medio de pago
-  pago = Libremarket.Pagos.Server.elegir_metodo_pago()
   #confirmar compra
   #reservar producto
   stock = Libremarket.Ventas.Server.reservar_producto(producto)
@@ -36,18 +31,19 @@ defmodule Libremarket.Compras do
       else
 
         #si pago ok enviar producto
-      if envio == :correo do
+      if forma_envio == :correo do
         Libremarket.Envio.Server.agendar_envio()
         Libremarket.Envio.Server.enviar_producto()
       end
 
-      IO.puts("Compra exitosa del producto #{producto.nombre} con pago #{pago} y envio #{envio}")
-      {:ok, %{producto: producto, pago: pago, envio: envio}}
+      IO.puts("Compra exitosa del producto #{producto.nombre} con pago #{forma_pago} y envio #{forma_envio}")
+      {:ok, %{producto: producto, pago: forma_pago, envio: forma_envio}}
 
     end
   end
 end
 end
+
 
 end
 
@@ -67,12 +63,9 @@ defmodule Libremarket.Compras.Server do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def comprar(pid \\ __MODULE__) do
-    GenServer.call(pid, :comprar)
+  def comprar(pid \\ __MODULE__, id_producto, forma_envio, forma_pago) do
+    GenServer.call(pid, {:comprar, id_producto, forma_envio, forma_pago})
   end
-
-  # Callbacks
-
   @doc """
   Inicializa el estado del servidor
   """
@@ -85,8 +78,8 @@ defmodule Libremarket.Compras.Server do
   Callback para un call :comprar
   """
   @impl true
-  def handle_call(:comprar, _from, state) do
-    result = Libremarket.Compras.comprar
+  def handle_call({:comprar, id_producto, forma_envio, forma_pago}, _from, state) do
+    result = Libremarket.Compras.comprar(id_producto, forma_envio, forma_pago)
     {:reply, result, state}
   end
 
