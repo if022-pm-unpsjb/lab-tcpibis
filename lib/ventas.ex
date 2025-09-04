@@ -64,12 +64,12 @@ defmodule Libremarket.Ventas.Server do
     GenServer.call(pid, :productos_disponibles)
   end
 
-  def liberar_reserva(pid \\ __MODULE__, producto) do
-    GenServer.call(pid, {:liberar_reserva, producto})
+  def liberar_reserva(pid \\ __MODULE__, id_producto) do
+    GenServer.call(pid, {:liberar_reserva, id_producto})
   end
 
-  def reservar_producto(pid \\ __MODULE__, producto) do
-    GenServer.call(pid, {:reservar_producto, producto})
+  def reservar_producto(pid \\ __MODULE__, id_producto) do
+    GenServer.call(pid, {:reservar_producto, id_producto})
   end
 
   def seleccionar_producto(pid \\ __MODULE__, id_producto) do
@@ -97,18 +97,27 @@ defmodule Libremarket.Ventas.Server do
   end
 
   @impl true
-  def handle_call({:liberar_reserva, producto}, _from, state) do
-    result = Libremarket.Ventas.liberar_reserva(producto, state)
-    {:reply, result, result}
+  def handle_call({:liberar_reserva, id_producto}, _from, state) do
+    case Libremarket.Ventas.liberar_reserva(id_producto, state) do
+      {:ok, new_state} ->
+        {:reply, {:ok, new_state}, new_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
   end
 
 
   @impl true
-  def handle_call({:reservar_producto, producto}, _from, state) do
-    result = Libremarket.Ventas.reservar_producto(producto, state)
-    {:reply, result, result}
-  end
+  def handle_call({:reservar_producto, id}, _from, state) do
+    case Libremarket.Ventas.reservar_producto(id, state) do
+      {:ok, new_state} ->
+        {:reply, {:ok, new_state}, new_state}
 
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
 
   @impl true
   def handle_call({:seleccionar_producto, id_producto}, _from, state) do

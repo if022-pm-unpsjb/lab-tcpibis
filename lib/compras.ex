@@ -9,7 +9,7 @@ defmodule Libremarket.Compras do
   end
   #confirmar compra
   #reservar producto
-  stock = Libremarket.Ventas.Server.reservar_producto(producto)
+  stock = Libremarket.Ventas.Server.reservar_producto(id_producto)
   if (stock === {:error, :sin_stock}) do
     IO.puts("No se pudo reservar el producto #{producto.nombre} por falta de stock")
     {:error, :sin_stock}
@@ -18,7 +18,7 @@ defmodule Libremarket.Compras do
     if infraccion do
       IO.inspect(infraccion, label: "Se detectó una infracción")
       #IO.puts("Infracción detectada: #{inspect(infraccion)}")
-      Libremarket.Ventas.Server.liberar_reserva(producto)
+      Libremarket.Ventas.Server.liberar_reserva(id_producto)
       :error
     else
       pago_ok = Libremarket.Pagos.Server.autorizar_pago()
@@ -26,7 +26,7 @@ defmodule Libremarket.Compras do
       if not pago_ok do
         IO.inspect(pago_ok, label: "Error pago rechazado")
         #IO.puts("Infracción detectada: #{inspect(infraccion)}")
-        Libremarket.Ventas.Server.liberar_reserva(producto)
+        Libremarket.Ventas.Server.liberar_reserva(id_producto)
         :error
       else
 
@@ -36,7 +36,15 @@ defmodule Libremarket.Compras do
         Libremarket.Envio.Server.enviar_producto()
       end
 
-      IO.puts("Compra exitosa del producto #{producto.nombre} con pago #{forma_pago} y envio #{forma_envio}")
+      case GenServer.call(Libremarket.Ventas.Server, {:seleccionar_producto, id_producto}) do
+        {:ok, producto} ->
+          IO.puts("Compra exitosa del producto #{producto.nombre} con pago #{forma_pago} y envio #{forma_envio}")
+          {:ok, producto}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+
       {:ok, %{producto: producto, pago: forma_pago, envio: forma_envio}}
 
     end
