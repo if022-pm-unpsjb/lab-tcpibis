@@ -1,7 +1,8 @@
 defmodule Libremarket.Infracciones do
 
   def detectar_infraccion(id_compra) do
-    Enum.random([:true, :false])
+    probabilidad=:rand.uniform(100)
+    probabilidad>70
   end
 
 end
@@ -25,7 +26,7 @@ defmodule Libremarket.Infracciones.Server do
   def detectar_infraccion(pid \\ __MODULE__, id_compra) do
     GenServer.call(pid, {:detectar_infraccion, id_compra})
   end
-  
+
   def listar_infracciones() do
     GenServer.call(__MODULE__, :listar_infracciones)
   end
@@ -46,6 +47,9 @@ defmodule Libremarket.Infracciones.Server do
   @impl true
   def handle_call({:detectar_infraccion, id_compra}, _from, state) do
     infraccion = Libremarket.Infracciones.detectar_infraccion(id_compra)
+    if not infraccion do
+        Libremarket.Pagos.autorizar_pago()
+    end
     new_state = Map.put(state, id_compra, infraccion)
     {:reply, infraccion, new_state}
   end
