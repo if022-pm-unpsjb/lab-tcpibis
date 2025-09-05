@@ -82,7 +82,7 @@ defmodule Libremarket.Ventas.Server do
   Inicializa el estado del servidor
   """
   @impl true
-  def init(state) do
+  def init(_state) do
     productos = Libremarket.Ventas.productos_disponibles()
     {:ok, productos}
   end

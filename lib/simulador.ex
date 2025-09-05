@@ -19,4 +19,20 @@ defmodule Simulador do
     Task.await_many(compras)
   end
 
+  def simular_compra_sleep() do
+    :timer.sleep(Enum.random(100..500))
+
+    envio = Enum.random([:retira, :correo])
+    pago = Enum.random([:efectivo, :transferencia, :td, :tc])
+
+    Libremarket.Ui.comprar(:rand.uniform(10), envio, pago)
+  end
+
+  def simular_compras_async_sleep(cantidad \\ 1) do
+    compras = for _n <- 1.. cantidad do
+      Task.async(fn -> simular_compra_sleep() end)
+    end
+    Task.await_many(compras)
+  end
+
 end

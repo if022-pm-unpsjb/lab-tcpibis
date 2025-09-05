@@ -27,10 +27,6 @@ defmodule Libremarket.Pagos.Server do
     GenServer.call(pid, :autorizar_pago)
   end
 
-  def elegir_metodo_pago(pid \\ __MODULE__) do
-    GenServer.call(pid, :elegir_metodo_pago)
-  end
-
   # Callbacks
 
   @doc """
@@ -47,13 +43,6 @@ defmodule Libremarket.Pagos.Server do
   @impl true
   def handle_call(:autorizar_pago, _from, state) do
     result = Libremarket.Pagos.autorizar_pago()
-    {:reply, result, state}
-  end
-
-
-  @impl true
-  def handle_call(:elegir_metodo_pago, _from, state) do
-    result = Libremarket.Pagos.elegir_metodo_pago()
     {:reply, result, state}
   end
 
