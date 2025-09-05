@@ -1,6 +1,6 @@
 defmodule Libremarket.Pagos do
 
-  def pago_autorizado() do
+  def autorizar_pago() do
     probabilidad=:rand.uniform(100)
     probabilidad<70
   end
@@ -23,12 +23,8 @@ defmodule Libremarket.Pagos.Server do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def pago_autorizado(pid \\ __MODULE__, id_compra) do
-    GenServer.call(pid, {:pago_autorizado, id_compra})
-  end
-
-  def listar_Pagos() do
-    GenServer.call(__MODULE__, :listar_Pagos)
+  def autorizar_pago(pid \\ __MODULE__) do
+    GenServer.call(pid, :autorizar_pago)
   end
 
   # Callbacks
@@ -38,22 +34,16 @@ defmodule Libremarket.Pagos.Server do
   """
   @impl true
   def init(state) do
-    {:ok, %{}}
+    {:ok, state}
   end
 
   @doc """
-  Callback para un call :pago_autorizado
+  Callbacks
   """
   @impl true
-  def handle_call({:pago_autorizado, id_compra}, _from, state) do
-    infraccion = Libremarket.Pagos.pago_autorizado(id_compra)
-    new_state = Map.put(state, id_compra, infraccion)
-    {:reply, infraccion, new_state}
-  end
-
-  @impl true
-  def handle_call(:listar_Pagos, _from, state) do
-    {:reply, state, state}
+  def handle_call(:autorizar_pago, _from, state) do
+    result = Libremarket.Pagos.autorizar_pago()
+    {:reply, result, state}
   end
 
 end

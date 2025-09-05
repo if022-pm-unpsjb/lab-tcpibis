@@ -1,6 +1,6 @@
 defmodule Libremarket.Infracciones do
 
-  def detectar_infraccion(id_compra) do
+  def detectar_infraccion(_id_compra) do
     probabilidad=:rand.uniform(100)
     probabilidad>70
   end
@@ -37,7 +37,7 @@ defmodule Libremarket.Infracciones.Server do
   Inicializa el estado del servidor
   """
   @impl true
-  def init(state) do
+  def init(_state) do
     {:ok, %{}}
   end
 
