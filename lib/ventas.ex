@@ -36,10 +36,17 @@ defmodule Libremarket.Ventas do
 
   def seleccionar_producto(id, state) do
     case state[id] do
-      nil -> {:error, :not_found}
-      p -> {:ok, p}
+      nil ->
+        {:error, :not_found}
+
+      %{cantidad: 0} = p ->
+        {:error, :sin_stock, p}
+
+      p ->
+        {:ok, p}
     end
   end
+
 
 
 end
@@ -121,8 +128,17 @@ defmodule Libremarket.Ventas.Server do
 
   @impl true
   def handle_call({:seleccionar_producto, id_producto}, _from, state) do
-    result = Libremarket.Ventas.seleccionar_producto(id_producto, state)
-    {:reply, result, state}
+    case Libremarket.Ventas.seleccionar_producto(id_producto, state) do
+      {:ok, producto} ->
+        {:reply, {:ok, producto}, state}
+
+      {:error, :not_found} ->
+        {:reply, {:error, :not_found}, state}
+
+        {:error, :sin_stock, producto} ->
+          {:reply, {:error, :sin_stock, producto}, state}
+      end
   end
+
 
 end
