@@ -7,29 +7,39 @@ defmodule Libremarket.Compras do
       # para sacar el {:ok, ...}
       producto_sin_ok =
         case producto do
-          {:ok, p} -> p
-          p -> p
+          {:ok, p} ->
+            p
+
+          {:error, :sin_stock, p} ->
+            p
+          {:error, reason} ->
+            {:error, reason}
         end
 
+      case producto_sin_ok do
+        {:error, :sin_stock, p} ->
+          IO.puts("No se pudo reservar el producto #{p.nombre} por falta de stock")
+
+          {:error,
+            %{
+              producto: p,
+              pago: forma_pago,
+              envio: forma_envio,
+              motivo: :sin_stock
+            }}
+
+        _ ->
+          {:error, %{producto: producto_sin_ok, pago: forma_pago, envio: forma_envio, motivo: :sin_stock}}
+      end
       if forma_envio == :correo do
         costo_envio = Libremarket.Envio.Server.calcular_costo_envio()
         IO.inspect(costo_envio, label: "Costo de envío")
       end
 
       # reservar producto
-      stock = Libremarket.Ventas.Server.reservar_producto(id_producto)
+      Libremarket.Ventas.Server.reservar_producto(id_producto)
 
       cond do
-        stock == {:error, :sin_stock} ->
-          IO.puts("No se pudo reservar el producto #{producto.nombre} por falta de stock")
-
-          {:error,
-           %{
-             producto: producto_sin_ok,
-             pago: forma_pago,
-             envio: forma_envio,
-             motivo: :sin_stock
-           }}
 
         Libremarket.Infracciones.Server.detectar_infraccion(1) ->
           IO.puts("Se detectó una infracción")
@@ -70,13 +80,22 @@ defmodule Libremarket.Compras do
                   p -> p
                 end
 
-              {:ok,
+            {:ok,
+              %{
+                producto: producto_sin_ok,
+                pago: forma_pago,
+                envio: forma_envio,
+                motivo: :ok
+              }}
+            {:error, :sin_stock, p} ->
+              {:error,
                 %{
-                  producto: producto_sin_ok,
+                  producto: p,
                   pago: forma_pago,
                   envio: forma_envio,
-                  motivo: :ok
-                }}
+                  motivo: :sin_stock
+                }
+              }
 
             {:error, reason} ->
               {:error,
