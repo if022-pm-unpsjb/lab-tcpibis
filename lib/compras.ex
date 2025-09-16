@@ -4,7 +4,7 @@ defmodule Libremarket.Compras do
       # selecciona producto
       producto = Libremarket.Ventas.Server.seleccionar_producto(id_producto)
 
-      # para para sacar el {:ok, ...}
+      # para sacar el {:ok, ...}
       producto_sin_ok =
         case producto do
           {:ok, p} -> p
@@ -91,8 +91,6 @@ defmodule Libremarket.Compras do
       end
     end
   end
-
-
 
 defmodule Libremarket.Compras.Server do
   @moduledoc """
