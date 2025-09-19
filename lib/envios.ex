@@ -23,13 +23,15 @@ defmodule Libremarket.Envio.Server do
   use GenServer
   @global_name {:global, __MODULE__}
 
+  @global_name {:global, __MODULE__}
+
   # API del cliente
 
   @doc """
   Crea un nuevo servidor de Envio
   """
   def start_link(opts \\ %{}) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    GenServer.start_link(__MODULE__, opts, name: @global_name)
   end
 
   def calcular_costo_envio(pid \\ @global_name) do

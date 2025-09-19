@@ -64,6 +64,7 @@ defmodule Libremarket.Compras do
              motivo: :pago_rechazado
            }}
 
+
         true ->
           # si pago ok enviar producto
           if forma_envio == :correo do
@@ -120,6 +121,10 @@ defmodule Libremarket.Compras.Server do
   use GenServer
 
   @global_name {:global, __MODULE__}
+<<<<<<< HEAD
+=======
+
+>>>>>>> 78f359e664279a9183aab18ccb3ccc416fbd66e5
   # API del cliente
 
   @doc """
