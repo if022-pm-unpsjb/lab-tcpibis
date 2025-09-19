@@ -21,6 +21,7 @@ defmodule Libremarket.Envio.Server do
   """
 
   use GenServer
+  @global_name {:global, __MODULE__}
 
   # API del cliente
 
@@ -31,7 +32,7 @@ defmodule Libremarket.Envio.Server do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def calcular_costo_envio(pid \\ __MODULE__) do
+  def calcular_costo_envio(pid \\ @global_name) do
     GenServer.call(pid, :calcular_costo_envio)
   end
 

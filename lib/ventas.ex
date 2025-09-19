@@ -57,7 +57,7 @@ defmodule Libremarket.Ventas.Server do
   """
 
   use GenServer
-
+  @global_name {:global, __MODULE__}
   # API del cliente
 
   @doc """
