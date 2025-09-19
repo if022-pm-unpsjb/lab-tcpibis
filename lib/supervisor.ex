@@ -10,12 +10,20 @@ defmodule Libremarket.Supervisor do
 
   @impl true
   def init(_opts) do
-    children = [
-      Libremarket.Compras.Server,
-      Libremarket.Infracciones.Server,
-      Libremarket.Pagos.Server,
-      Libremarket.Envio.Server,
-      Libremarket.Ventas.Server
+    topologies = [
+      gossip: [
+        strategy: Cluster.Strategy.Gossip,
+        config: [
+          port: 45892,
+          if_addr: "0.0.0.0",
+          multicast_addr: "127.0.0.1",
+          broadcast_only: true,
+          secret: "secret"
+        ]
+      ]
+    ]
+    childrens = [
+      {Cluster.Supervisor, [topologies, [name: Libremarket.ClusterSupervisor]]}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
