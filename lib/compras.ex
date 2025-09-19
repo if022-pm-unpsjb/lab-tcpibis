@@ -64,6 +64,7 @@ defmodule Libremarket.Compras do
              motivo: :pago_rechazado
            }}
 
+
         true ->
           # si pago ok enviar producto
           if forma_envio == :correo do
