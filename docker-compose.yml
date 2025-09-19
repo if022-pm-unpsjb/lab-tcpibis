@@ -103,7 +103,3 @@ services:
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
-<<<<<<< HEAD
-
-=======
->>>>>>> 6153c368f1b85eb19828df64737d290975096b1c
