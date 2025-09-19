@@ -2,7 +2,7 @@ defmodule Libremarket.Compras do
 
   def comprar(id_producto, forma_envio, forma_pago) do
       # selecciona producto
-      producto = :erpc.call(:"ventas@ventas", Libremarket.Ventas.Server, :seleccionar_producto, [id_producto])
+      producto = Libremarket.Ventas.Server.seleccionar_producto(id_producto)
 
       # para sacar el {:ok, ...}
       producto_sin_ok =
@@ -32,18 +32,16 @@ defmodule Libremarket.Compras do
           {:error, %{producto: producto_sin_ok, pago: forma_pago, envio: forma_envio, motivo: :sin_stock}}
       end
       if forma_envio == :correo do
-        costo_envio = :erpc.call(:"envios@envios", Libremarket.Envio.Server, :calcular_costo_envio, [])
+        costo_envio = Libremarket.Envio.Server.calcular_costo_envio()
         IO.inspect(costo_envio, label: "Costo de envío")
       end
 
       # reservar producto
-      :erpc.call(:"ventas@ventas", Libremarket.Ventas.Server, :reservar_producto, [id_producto])
-
+      Libremarket.Ventas.Server.reservar_producto(id_producto)
       cond do
-        :erpc.call(:"infracciones@infracciones", Libremarket.Infracciones.Server, :detectar_infraccion, [1]) ->
+        Libremarket.Infracciones.Server.detectar_infraccion(1) ->
           IO.puts("Se detectó una infracción")
-          :erpc.call(:"ventas@ventas", Libremarket.Ventas.Server, :liberar_reserva, [id_producto])
-
+          Libremarket.Ventas.Server.liberar_reserva(id_producto)
           {:error,
            %{
              producto: producto_sin_ok,
@@ -52,10 +50,9 @@ defmodule Libremarket.Compras do
              motivo: :infraccion_detectada
            }}
 
-        not :erpc.call(:"pagos@pagos", Libremarket.Pagos.Server, :autorizar_pago, []) ->
+        not Libremarket.Pagos.Server.autorizar_pago() ->
           IO.puts("Error pago rechazado")
-          :erpc.call(:"ventas@ventas", Libremarket.Ventas.Server, :liberar_reserva, [id_producto])
-
+          Libremarket.Ventas.Server.liberar_reserva(id_producto)
           {:error,
            %{
              producto: producto_sin_ok,
@@ -68,11 +65,11 @@ defmodule Libremarket.Compras do
         true ->
           # si pago ok enviar producto
           if forma_envio == :correo do
-            :erpc.call(:"envios@envios", Libremarket.Envio.Server, :agendar_envio, [])
-            :erpc.call(:"envios@envios", Libremarket.Envio.Server, :enviar_producto, [])
+            Libremarket.Envio.Server.agendar_envio()
+            Libremarket.Envio.Server.enviar_producto()
           end
 
-          case :erpc.call(:"ventas@ventas", Libremarket.Ventas.Server, :seleccionar_producto, [id_producto]) do
+          case Libremarket.Ventas.Server.seleccionar_producto(id_producto) do
             {:ok, producto_ok} ->
               producto_sin_ok =
                 case producto_ok do
