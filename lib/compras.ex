@@ -71,7 +71,8 @@ defmodule Libremarket.Compras do
             :erpc.call(:"envios@envios", Libremarket.Envio.Server, :enviar_producto, [])
           end
 
-          case :erpc.call(:"ventas@ventas", Libremarket.Ventas.Server, :seleccionar_producto, [id_producto]) do            {:ok, producto_ok} ->
+          case :erpc.call(:"ventas@ventas", Libremarket.Ventas.Server, :seleccionar_producto, [id_producto]) do
+            {:ok, producto_ok} ->
               producto_sin_ok =
                 case producto_ok do
                   {:ok, p} -> p
