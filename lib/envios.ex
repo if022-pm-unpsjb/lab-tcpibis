@@ -36,11 +36,11 @@ defmodule Libremarket.Envio.Server do
     GenServer.call(pid, :calcular_costo_envio)
   end
 
-  def enviar_producto(pid \\ __MODULE__) do
+  def enviar_producto(pid \\ @global_name) do
     GenServer.call(pid, :enviar_producto)
   end
 
-  def agendar_envio(pid \\ __MODULE__) do
+  def agendar_envio(pid \\ @global_name) do
     GenServer.call(pid, :agendar_envio)
   end
 
