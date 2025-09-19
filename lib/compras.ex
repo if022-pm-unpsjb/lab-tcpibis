@@ -119,16 +119,18 @@ defmodule Libremarket.Compras.Server do
 
   use GenServer
 
+  @global_name {:global, __MODULE__}
+
   # API del cliente
 
   @doc """
   Crea un nuevo servidor de Compras
   """
   def start_link(_opts \\ %{}) do
-    GenServer.start_link(__MODULE__, %{next_id: 0}, name: __MODULE__)
+    GenServer.start_link(__MODULE__, %{next_id: 0}, name: @global_name)
   end
 
-  def comprar(pid \\ __MODULE__, id_producto, forma_envio, forma_pago) do
+  def comprar(pid \\ @global_name, id_producto, forma_envio, forma_pago) do
     GenServer.call(pid, {:comprar, id_producto, forma_envio, forma_pago})
   end
   @doc """
