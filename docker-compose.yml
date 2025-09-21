@@ -2,7 +2,7 @@ services:
   simulador:
     image: elixir:alpine
     container_name: simulador
-    hostname: simulador
+    network_mode: "host"
     volumes:
       - ./:/app
     working_dir: /app
@@ -10,16 +10,14 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
-    command: iex --sname simulador --cookie secret -S mix
-    # para habilitar -it
-    stdin_open: true
-    tty: true
+    command: 
+      elixir --sname simulador --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
   infracciones:
     image: elixir:alpine
     container_name: infracciones
-    hostname: infracciones
+    network_mode: "host"
     volumes:
       - ./:/app
     working_dir: /app
@@ -27,17 +25,16 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
-    command: iex --sname infracciones --cookie secret -S mix
+    command: 
+      elixir --sname infracciones --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
-    stdin_open: true
-    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
   envios:
     image: elixir:alpine
     container_name: envios
-    hostname: envios
+    network_mode: "host"
     volumes:
       - ./:/app
     working_dir: /app
@@ -45,17 +42,16 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
-    command: iex --sname envios --cookie secret -S mix
+    command: 
+      elixir --sname envios --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
-    stdin_open: true
-    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
   compras:
     image: elixir:alpine
     container_name: compras
-    hostname: compras
+    network_mode: "host"
     volumes:
       - ./:/app
     working_dir: /app
@@ -63,16 +59,15 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-    command: iex --sname compras --cookie secret -S mix
+    command: 
+      elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
-    stdin_open: true
-    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
   pagos:
     image: elixir:alpine
     container_name: pagos
-    hostname: pagos
+    network_mode: "host"
     volumes:
       - ./:/app
     working_dir: /app
@@ -80,17 +75,16 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
-    command: iex --sname pagos --cookie secret -S mix
+    command: 
+      elixir --sname pagos --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
-    stdin_open: true
-    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
   ventas:
     image: elixir:alpine
     container_name: ventas
-    hostname: ventas
+    network_mode: "host"
     volumes:
       - ./:/app
     working_dir: /app
@@ -98,8 +92,7 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
-    command: iex --sname ventas --cookie secret -S mix
+    command: 
+      elixir --sname ventas --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
-    stdin_open: true
-    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
