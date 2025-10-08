@@ -46,7 +46,7 @@ defmodule Libremarket.Compras do
       {:error, :sin_stock, p} ->
         error(%{producto: p, pago: forma_pago, envio: forma_envio, motivo: :sin_stock})
 
-      {:error, :pago_rechazado} ->             
+      {:error, :pago_rechazado} ->
         _ = liberar_reserva(id_producto)
         error(%{producto: nil, pago: forma_pago, envio: forma_envio, motivo: :pago_rechazado})
 
@@ -133,10 +133,11 @@ defmodule Libremarket.Compras.Server do
 
   @global_name {:global, __MODULE__}
 
-  # -- API pública --
+  # -- API pÃºblica --
   def start_link(_opts \\ %{}) do
-    GenServer.start_link(__MODULE__, %{next_id: 0}, name: @global_name)
+    GenServer.start_link(__MODULE__, %{next_id: 0, compras: %{}}, name: @global_name)
   end
+
 
   @spec comprar(pid :: pid | atom, integer, :correo | :retira, atom) ::
           {:ok, map} | {:error, map}
@@ -144,12 +145,24 @@ defmodule Libremarket.Compras.Server do
     GenServer.call(pid, {:comprar, id_producto, forma_envio, forma_pago})
   end
 
+  def obtener_compra(pid \\ @global_name, id_compra) do
+    GenServer.call(pid, {:obtener_compra, id_compra})
+  end
+
+  def eliminar_compra(pid \\ @global_name, id_compra) do
+    GenServer.call(pid, {:eliminar_compra, id_compra})
+  end
+
+  def actualizar_compra(pid \\ @global_name, id_compra, cambios) do
+    GenServer.call(pid, {:actualizar_compra, id_compra, cambios})
+  end
+
   # -- GenServer callbacks --
   @impl true
   def init(state), do: {:ok, state}
 
   @impl true
-  def handle_call({:comprar, id_producto, forma_envio, forma_pago}, _from, %{next_id: id} = st) do
+  def handle_call({:comprar, id_producto, forma_envio, forma_pago}, _from, %{next_id: id, compras: compras} = st) do
     compra_id = id + 1
 
     result = Libremarket.Compras.comprar(id_producto, forma_envio, forma_pago)
@@ -160,6 +173,36 @@ defmodule Libremarket.Compras.Server do
         {:error, data} -> {:error, Map.put(data, :id, compra_id)}
       end
 
-    {:reply, reply, %{st | next_id: compra_id}}
+    # Guardar la compra en el estado
+    nuevo_compras = Map.put(compras, compra_id, reply)
+    {:reply, reply, %{st | next_id: compra_id, compras: nuevo_compras}}
   end
+
+  def handle_call({:actualizar_compra, id_compra, cambios}, _from, %{compras: compras} = state) do
+    case Map.get(compras, id_compra) do
+      {:ok, compra} ->
+        compra_actualizada = Map.merge(compra, cambios)
+        nuevo_compras = Map.put(compras, id_compra, {:ok, compra_actualizada})
+        {:reply, {:ok, compra_actualizada}, %{state | compras: nuevo_compras}}
+
+      {:error, _} = err ->
+        {:reply, err, state}
+
+      nil ->
+        {:reply, {:error, :no_encontrada}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:obtener_compra, id_compra}, _from, %{compras: compras} = state) do
+    compra = Map.get(compras, id_compra, :no_encontrada)
+    {:reply, compra, state}
+  end
+
+  @impl true
+  def handle_call({:eliminar_compra, id_compra}, _from, %{compras: compras} = state) do
+    nuevo_compras = Map.delete(compras, id_compra)
+    {:reply, :ok, %{state | compras: nuevo_compras}}
+  end
+
 end
