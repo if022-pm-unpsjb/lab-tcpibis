@@ -118,10 +118,6 @@ defmodule Libremarket.Compras.Server do
   use GenServer
 
   @global_name {:global, __MODULE__}
-<<<<<<< HEAD
-=======
-
->>>>>>> 78f359e664279a9183aab18ccb3ccc416fbd66e5
   # API del cliente
 
   @doc """

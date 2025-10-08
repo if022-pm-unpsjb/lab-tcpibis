@@ -1,18 +1,4 @@
 services:
-  simulador:
-    image: elixir:alpine
-    container_name: simulador
-    network_mode: "host"
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-    command: 
-      elixir --sname simulador --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
 
   infracciones:
     image: elixir:alpine
@@ -26,73 +12,10 @@ services:
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
     command: 
-      elixir --sname infracciones --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      elixir --name infracciones@192.168.41.136 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
-  envios:
-    image: elixir:alpine
-    container_name: envios
-    network_mode: "host"
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-      SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
-    command: 
-      elixir --sname envios --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
-  compras:
-    image: elixir:alpine
-    container_name: compras
-    network_mode: "host"
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-    command: 
-      elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
-
-  pagos:
-    image: elixir:alpine
-    container_name: pagos
-    network_mode: "host"
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-      SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
-    command: 
-      elixir --sname pagos --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
-
-
-  ventas:
-    image: elixir:alpine
-    container_name: ventas
-    network_mode: "host"
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-      SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
-    command: 
-      elixir --sname ventas --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
