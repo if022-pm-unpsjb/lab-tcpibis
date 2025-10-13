@@ -11,12 +11,12 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
-      AMQP_URL: amqps://usuario:contraseña@tuinstancia.cloudamqp.com/vhost
+      AMQP_URL: amqps://wwzzokyv:48H2oHfH1wYu7zytyhkyYfSi9_R3i2Nk@jackal.rmq.cloudamqp.com/wwzzokyv
+      ERL_INETRC: /app/inetrc
+      INSECURE_AMQPS: "1"
     command: 
-      elixir --name infracciones@192.168.41.136 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
+      elixir --sname infracciones --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     user: "${DOCKER_UID}:${DOCKER_GID}"
-
 
   compras:
     image: elixir:1.15.7-alpine
@@ -29,6 +29,7 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
+      ERL_INETRC: /app/inetrc
       AMQP_URL: amqps://wwzzokyv:48H2oHfH1wYu7zytyhkyYfSi9_R3i2Nk@jackal.rmq.cloudamqp.com/wwzzokyv
     command: 
       elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
@@ -46,6 +47,7 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
+      ERL_INETRC: /app/inetrc
     command: 
       elixir --sname pagos --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
@@ -63,7 +65,44 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
+      ERL_INETRC: /app/inetrc
     command: 
       elixir --sname ventas --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  envios:
+      image: elixir:1.15.7-alpine
+      container_name: envios
+      network_mode: "host"
+      volumes:
+        - ./:/app
+      working_dir: /app
+      environment:
+        MIX_HOME: /app/mix_home
+        HEX_HOME: /app/hex_home
+        SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
+        ERL_INETRC: /app/inetrc
+      command: 
+        elixir --sname envios --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      # para habilitar -it
+      user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  rest:
+    image: elixir:1.15.7-alpine
+    container_name: rest
+    network_mode: "host"           
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      SERVER_TO_RUN: Elixir.Libremarket.Rest.Server   # 👈 arranca el server HTTP
+      REST_PORT: 4000                                  # 👈 puerto del Plug/Cowboy
+      SECRET: ${SECRET}
+      ERL_INETRC: /app/inetrc
+    command: >
+      elixir --sname rest --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
     user: "${DOCKER_UID}:${DOCKER_GID}"
