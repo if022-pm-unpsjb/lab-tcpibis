@@ -21,6 +21,7 @@ defmodule Libremarket.Envio.Server do
   """
 
   use GenServer
+  @global_name {:global, __MODULE__}
 
   @global_name {:global, __MODULE__}
 

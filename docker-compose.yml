@@ -1,21 +1,7 @@
 services:
-  simulador:
-    image: elixir:alpine
-    container_name: simulador
-    network_mode: "host"
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-    command: 
-      elixir --sname simulador --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
 
   infracciones:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: infracciones
     network_mode: "host"
     volumes:
@@ -25,31 +11,15 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
+      AMQP_URL: amqps://usuario:contraseña@tuinstancia.cloudamqp.com/vhost
     command: 
-      elixir --sname infracciones --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
-
-
-  envios:
-    image: elixir:alpine
-    container_name: envios
-    network_mode: "host"
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-      SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
-    command: 
-      elixir --sname envios --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      elixir --name infracciones@192.168.41.136 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
   compras:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: compras
     network_mode: "host"
     volumes:
@@ -59,13 +29,14 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
+      AMQP_URL: amqps://wwzzokyv:48H2oHfH1wYu7zytyhkyYfSi9_R3i2Nk@jackal.rmq.cloudamqp.com/wwzzokyv
     command: 
       elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
   pagos:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: pagos
     network_mode: "host"
     volumes:
@@ -82,7 +53,7 @@ services:
 
 
   ventas:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: ventas
     network_mode: "host"
     volumes:
@@ -95,22 +66,4 @@ services:
     command: 
       elixir --sname ventas --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
- 
-  rest:
-    image: elixir:alpine
-    container_name: rest
-    network_mode: "host"              # igual que los demás
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-      SERVER_TO_RUN: Elixir.Libremarket.Rest.Server   # 👈 arranca el server HTTP
-      REST_PORT: 4000                                  # 👈 puerto del Plug/Cowboy
-      SECRET: ${SECRET}
-    command: >
-      elixir --sname rest --cookie ${SECRET}
-      -S mix run --no-halt --no-compile
     user: "${DOCKER_UID}:${DOCKER_GID}"

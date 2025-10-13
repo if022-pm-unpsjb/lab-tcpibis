@@ -5,13 +5,12 @@ defmodule Libremarket.MixProject do
     [
       app: :libremarket,
       version: "0.1.0",
-      elixir: "~> 1.17",
+      elixir: "~> 1.15",              # <<-- RELAJADO para correr con 1.15.7
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       mod: {Libremarket, []},
@@ -19,14 +18,13 @@ defmodule Libremarket.MixProject do
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:libcluster, "~> 3.4"},
-      {:plug_cowboy, "~> 2.7"}, # servidor HTTP que usa Plug + Cowboy
-      {:jason, "~> 1.4"}        # codificador/decodificador JSON
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:libcluster, "~> 3.5"},
+      {:plug_cowboy, "~> 2.7"},
+      {:jason, "~> 1.4"},
+      {:amqp, "~> 3.3"}               # <<-- SIN overrides ni 3.13
+      # NO agregues {:amqp_client, ...} ni {:rabbit_common, ...}
     ]
   end
 end
