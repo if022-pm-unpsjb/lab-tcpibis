@@ -1,107 +1,101 @@
 defmodule Libremarket.Infracciones do
-  @moduledoc false
-
-  def detectar_infraccion(_id_compra) do
-    probabilidad = :rand.uniform(100)
-    probabilidad > 70
-  end
-end
-
-defmodule Libremarket.Infracciones.AMQP do
   @moduledoc """
-  Consumidor AMQP para pedidos de infracciones.
-  - Escucha en `@exchange` + `@queue`.
-  - Responde via `reply_to` manteniendo `correlation_id`.
+  Servicio de Infracciones con comunicación AMQP (RabbitMQ/CloudAMQP).
+
+  Este módulo:
+  - Escucha mensajes AMQP en la cola `"infracciones_queue"`.
+  - Ejecuta `detectar_infraccion/1` para determinar si hay infracción.
+  - Responde al remitente (compras) mediante la cola `reply_to`.
   """
 
   use GenServer
   require Logger
-  alias AMQP.{Connection, Channel, Exchange, Queue, Basic}
 
-  @exchange "compras_infracciones"     # direct
-  @queue    "infracciones_queue"       # pedidos (request)
-  @route    "infracciones.detectar"
+  @exchange "compras_infracciones"
+  @queue "infracciones_queue"
+  @global_name {:global, __MODULE__}
 
-  # API
-  def start_link(_opts \\ []) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  # === API pública ===
+  def start_link(_opts \\ %{}) do
+    GenServer.start_link(__MODULE__, %{}, name: @global_name)
   end
 
-  # Callbacks
+  # === Lógica de negocio ===
+  @doc "Simula la detección de infracciones con una probabilidad del 30%."
+  def detectar_infraccion(_id_compra) do
+    probabilidad = :rand.uniform(100)
+    probabilidad > 70
+  end
+
+  # === Callbacks del GenServer ===
   @impl true
-  def init(state) do
-    with {:ok, url} <- fetch_url(),
-         {:ok, conn} <- Connection.open(url, ssl_options: ssl_opts()), #aca desactiva la verificacion
-         {:ok, chan} <- Channel.open(conn),
-         :ok <- Basic.qos(chan, prefetch_count: 10),
-         :ok <- Exchange.declare(chan, @exchange, :direct, durable: true),
-         {:ok, _} <- Queue.declare(chan, @queue, durable: true),
-         :ok <- Queue.bind(chan, @queue, @exchange, routing_key: @route),
-         {:ok, _tag} <- Basic.consume(chan, @queue, nil, no_ack: false) do
-      {:ok, %{conn: conn, chan: chan}}
+  def init(_) do
+    Logger.info("🧩 Servidor de infracciones iniciado")
+
+    amqp_url =
+      System.get_env("AMQP_URL") ||
+        raise "❌ Falta variable de entorno AMQP_URL (URL de CloudAMQP)"
+
+    {:ok, conn} = AMQP.Connection.open(amqp_url)
+    {:ok, chan} = AMQP.Channel.open(conn)
+
+    :ok = AMQP.Exchange.declare(chan, @exchange, :direct, durable: true)
+    {:ok, _} = AMQP.Queue.declare(chan, @queue, durable: true)
+    :ok = AMQP.Queue.bind(chan, @queue, @exchange, routing_key: "check_infraccion")
+
+    {:ok, _consumer_tag} = AMQP.Basic.consume(chan, @queue)
+    Logger.info("📡 Escuchando mensajes en '#{@queue}' (exchange: #{@exchange})")
+
+    {:ok, %{channel: chan}}
+  end
+
+  # Recibe mensajes desde compras
+  @impl true
+  def handle_info({:basic_deliver, payload, %{delivery_tag: tag, reply_to: reply_to}}, state) do
+    Logger.info("📨 Mensaje recibido: #{payload}")
+
+    with {:ok, data} <- Jason.decode(payload),
+         id when is_integer(id) <- data["id_compra"] do
+      resultado = detectar_infraccion(id)
+      response = Jason.encode!(%{id_compra: id, infraccion: resultado})
+
+      # Publicar respuesta en la cola indicada por reply_to
+      AMQP.Basic.publish(state.channel, "", reply_to, response)
+      Logger.info("✅ Respuesta enviada a '#{reply_to}': #{response}")
     else
-      err ->
-        {:stop, {:amqp_init_failed, err}}
+      error ->
+        Logger.error("⚠️ Error procesando mensaje #{payload}: #{inspect(error)}")
     end
+
+    AMQP.Basic.ack(state.channel, tag)
+    {:noreply, state}
   end
 
-  defp ssl_opts() do
-    case System.get_env("INSECURE_AMQPS") do
-      "1" -> [verify: :verify_none]
-      _   -> []
-    end
+
+  @impl true
+  def handle_info({:basic_consume_ok, _meta}, state) do
+    Logger.debug("AMQP consume OK")
+    {:noreply, state}
   end
 
   @impl true
-  # Mensaje entrante desde RabbitMQ
-  def handle_info({:basic_deliver, payload, %{delivery_tag: tag, reply_to: reply_to, correlation_id: cid} = meta}, %{chan: chan} = st) do
-    Logger.debug("Pedido infracción recibido cid=#{inspect(cid)} reply_to=#{inspect(reply_to)} meta=#{inspect(meta, limit: 50)}")
-    result =
-      case safe_decode(payload) do
-        {:ok, %{"id_compra" => id}} ->
-          infrac = Libremarket.Infracciones.detectar_infraccion(id)
-          %{id_compra: id, infraccion: infrac}
-        _ ->
-          %{error: "payload_invalido"}
-      end
-
-    # Responder al reply_to con el mismo correlation_id
-    :ok =
-      Basic.publish(
-        chan,
-        "",            # default exchange directo a la queue reply_to
-        reply_to,
-        Jason.encode!(result),
-        correlation_id: cid,
-        content_type: "application/json"
-      )
-
-    :ok = Basic.ack(chan, tag)
-    {:noreply, st}
+  def handle_info({:basic_cancel, _meta}, state) do
+    Logger.warning("AMQP consume cancelado por el broker")
+    {:noreply, state}
   end
 
   @impl true
-  def terminate(reason, %{conn: conn, chan: chan}) do
-    Logger.warning("Infracciones.AMQP terminando: #{inspect(reason)}")
-    Channel.close(chan)
-    Connection.close(conn)
-    :ok
+  def handle_info({:basic_cancel_ok, _meta}, state) do
+    Logger.warning("AMQP cancel_ok: deteniendo consumidor")
+    {:stop, :normal, state}
   end
 
-  defp fetch_url() do
-    case System.get_env("AMQP_URL") do
-      nil -> {:error, :missing_amqp_url}
-      url -> {:ok, url}
-    end
+  @impl true
+  def handle_info(other, state) do
+    Logger.debug("Mensaje no esperado en Infracciones.AMQP: #{inspect(other)}")
+    {:noreply, state}
   end
 
-  defp safe_decode(bin) do
-    try do
-      {:ok, Jason.decode!(bin)}
-    rescue
-      _ -> {:error, :json}
-    end
-  end
 end
 
 defmodule Libremarket.Infracciones.Server do
@@ -129,13 +123,10 @@ defmodule Libremarket.Infracciones.Server do
   # Callbacks
   @impl true
   def init(_state) do
-    # Levantar el consumidor AMQP al iniciar el server
-    case Libremarket.Infracciones.AMQP.start_link() do
-      {:ok, _pid} -> Logger.info("Infracciones.AMQP iniciado")
-      {:error, reason} -> Logger.error("No se pudo iniciar Infracciones.AMQP: #{inspect(reason)}")
-    end
+    # El consumidor AMQP ya vive en Libremarket.Infracciones (este módulo no arranca nada extra)
     {:ok, %{}}
   end
+
 
   @impl true
   def handle_call({:detectar_infraccion, id_compra}, _from, state) do
