@@ -216,6 +216,42 @@ defmodule Libremarket.Compras.Server do
     {:reply, :ok, %{state | compras: nuevo_compras}}
   end
 
+  # === API NUEVA: AMQP nos dice la infracicon ===
+  def procesar_infraccion(pid \\ @global_name, id_compra, infraccion?) do
+    GenServer.call(pid, {:procesar_infraccion, id_compra, infraccion?})
+  end
+
+  @impl true
+  def handle_call({:procesar_infraccion, id_compra, infr?}, _from, %{compras: compras} = st) do
+    case Map.get(compras, id_compra) do
+      {:ok, compra} ->
+        compra2 = Map.put(compra, :infraccion, infr?)
+
+        if infr? do
+          # ⚠️ transformar a error y registrar motivo
+          compra_err =
+            compra2
+            |> Map.put(:motivo, :infraccion_detectada)
+
+          nuevo = Map.put(compras, id_compra, {:error, compra_err})
+          {:reply, {:error, compra_err}, %{st | compras: nuevo}}
+        else
+          # ✅ se mantiene ok, solo anotamos
+          nuevo = Map.put(compras, id_compra, {:ok, compra2})
+          {:reply, {:ok, compra2}, %{st | compras: nuevo}}
+        end
+
+      {:error, compra} ->
+        # Ya venía en error (p.ej. pago), solo registramos el dato de infracción
+        compra2 = Map.put(compra, :infraccion, infr?)
+        nuevo = Map.put(compras, id_compra, {:error, compra2})
+        {:reply, {:error, compra2}, %{st | compras: nuevo}}
+
+      nil ->
+        {:reply, {:error, :no_encontrada}, st}
+    end
+  end
+
 end
 
 
@@ -276,10 +312,24 @@ defmodule Libremarket.Compras.AMQP do
 
   @impl true
   def handle_info({:basic_deliver, payload, _meta}, state) do
-    %{"id_compra" => id, "infraccion" => infr?} = Jason.decode!(payload)
-    Logger.info("Compras recibió resultado de infracciones: #{inspect(infr?)}")
+    msg = Jason.decode!(payload)
+    id  = msg["id_compra"]
+    infr_field = msg["infraccion"]
 
-    Libremarket.Compras.Server.actualizar_compra(id, %{infraccion: infr?})
+    # Normalización: aceptamos boolean, entero 1..100 (umbral 30), o float 0..1 (umbral 0.3)
+    infr? =
+      cond do
+        is_boolean(infr_field) -> infr_field
+        is_integer(infr_field) -> infr_field >= 30
+        is_float(infr_field)   -> infr_field >= 0.3
+        true                   -> false
+      end
+
+    Logger.info("Compras recibió resultado de infracciones (normalizado): #{inspect(infr?)}")
+
+    # 👇 NUEVO: aplicá la política Opción 1 (transformar a error si infracción)
+    _ = Libremarket.Compras.Server.procesar_infraccion(id, infr?)
+
     {:noreply, state}
   end
 
