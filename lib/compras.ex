@@ -86,15 +86,18 @@ defmodule Libremarket.Compras do
     :ok
   end
 
-  # === Paso 4: validaciones (infracciones, pago) con compensación ===
+# === Paso 4: validaciones (infracciones, pago) con compensación ===
   defp validar_infracciones!(id_producto) do
-    if Libremarket.Infracciones.Server.detectar_infraccion(1) do
-      liberar_reserva(id_producto)
-      {:error, :infraccion_detectada}
-    else
-      :ok
-    end
+    # Publicamos la solicitud de verificación en AMQP
+    :ok = Libremarket.Compras.AMQP.publish_verificacion(id_producto)
+
+    # En este punto no esperamos respuesta inmediata:
+    # la compra queda "pendiente de verificación"
+    require Logger
+    Logger.info("Compra #{id_producto}: verificación de infracciones publicada (async)")
+    :ok
   end
+
 
   defp autorizar_pago!() do
     if Libremarket.Pagos.Server.autorizar_pago() do
@@ -139,10 +142,10 @@ defmodule Libremarket.Compras.Server do
   end
 
 
-  @spec comprar(pid :: pid | atom, integer, :correo | :retira, atom) ::
-          {:ok, map} | {:error, map}
-  def comprar(pid \\ @global_name, id_producto, forma_envio, forma_pago) do
-    GenServer.call(pid, {:comprar, id_producto, forma_envio, forma_pago})
+  @spec comprar(pid | atom, integer, :correo | :retira, atom, non_neg_integer) ::
+        {:ok, map} | {:error, map}
+  def comprar(pid \\ @global_name, id_producto, forma_envio, forma_pago, timeout \\ 30_000) do
+    GenServer.call(pid, {:comprar, id_producto, forma_envio, forma_pago}, timeout)
   end
 
   def obtener_compra(pid \\ @global_name, id_compra) do
@@ -159,7 +162,15 @@ defmodule Libremarket.Compras.Server do
 
   # -- GenServer callbacks --
   @impl true
-  def init(state), do: {:ok, state}
+  def init(state) do
+    case Libremarket.Compras.AMQP.start_link(%{}) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _}} -> :ok
+      other -> require Logger; Logger.error("AMQP no arrancó: #{inspect(other)}")
+    end
+    {:ok, state}
+  end
+
 
   @impl true
   def handle_call({:comprar, id_producto, forma_envio, forma_pago}, _from, %{next_id: id, compras: compras} = st) do
@@ -203,6 +214,73 @@ defmodule Libremarket.Compras.Server do
   def handle_call({:eliminar_compra, id_compra}, _from, %{compras: compras} = state) do
     nuevo_compras = Map.delete(compras, id_compra)
     {:reply, :ok, %{state | compras: nuevo_compras}}
+  end
+
+end
+
+
+defmodule Libremarket.Compras.AMQP do
+  use GenServer
+  alias AMQP.{Connection, Channel, Basic, Queue}
+  require Logger
+
+  @exchange ""
+  @request_q "infracciones.req"
+  @response_q "compras.resp"
+
+  def start_link(_opts), do: GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+
+  @impl true
+  def init(_) do
+    amqp_url = System.get_env("AMQP_URL") || "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+    {:ok, conn} = Connection.open(amqp_url, ssl_options: [verify: :verify_none])
+    {:ok, chan} = Channel.open(conn)
+    {:ok, _} = Queue.declare(chan, @response_q, durable: false)
+    {:ok, _} = Basic.consume(chan, @response_q, nil, no_ack: true)
+    {:ok, %{conn: conn, chan: chan}}
+  end
+
+  def publish_verificacion(id_compra) do
+    GenServer.cast(__MODULE__, {:verificar, id_compra})
+  end
+
+  @impl true
+  def handle_cast({:verificar, id_compra}, %{chan: chan} = st) do
+    payload = Jason.encode!(%{id_compra: id_compra})
+    :ok = Basic.publish(chan, "", @request_q, payload,
+      content_type: "application/json",
+      reply_to: @response_q
+    )
+    Logger.info("Compras → publicó solicitud de verificación #{id_compra}")
+    {:noreply, st}
+  end
+
+  @impl true
+  def handle_info({:basic_consume_ok, %{consumer_tag: tag}}, state) do
+    require Logger
+    Logger.info("Compras.AMQP → consumo registrado (#{tag})")
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:basic_cancel, %{consumer_tag: tag}}, state) do
+    Logger.warning("Compras.AMQP → consumo cancelado (#{tag})")
+    {:stop, :normal, state}
+  end
+
+  @impl true
+  def handle_info({:basic_cancel_ok, %{consumer_tag: tag}}, state) do
+    Logger.info("Compras.AMQP → cancelación confirmada (#{tag})")
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:basic_deliver, payload, _meta}, state) do
+    %{"id_compra" => id, "infraccion" => infr?} = Jason.decode!(payload)
+    Logger.info("Compras recibió resultado de infracciones: #{inspect(infr?)}")
+
+    Libremarket.Compras.Server.actualizar_compra(id, %{infraccion: infr?})
+    {:noreply, state}
   end
 
 end
