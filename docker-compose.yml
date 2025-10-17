@@ -12,6 +12,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
     command: 
       elixir --sname infracciones --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
@@ -47,8 +48,9 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
-      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
     command: 
       elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it

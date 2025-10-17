@@ -2,7 +2,7 @@ defmodule Libremarket.Infracciones do
 
   def detectar_infraccion(_id_compra) do
     probabilidad=:rand.uniform(100)
-    probabilidad>-1
+    probabilidad>70
   end
 
 end
@@ -40,7 +40,6 @@ defmodule Libremarket.Infracciones.Server do
   """
   @impl true
   def init(_state) do
-    {:ok, _pid} = Libremarket.Infracciones.AMQP.start_link()
     {:ok, %{}}
   end
 
@@ -85,7 +84,7 @@ defmodule Libremarket.Infracciones.AMQP do
     {:ok, chan} = Channel.open(conn)
 
     {:ok, _} = Queue.declare(chan, @request_q, durable: false, auto_delete: false)
-    :ok = Basic.qos(chan, prefetch_count: 10)
+    :ok = Basic.qos(chan, prefetch_count: 0)
     {:ok, _ctag} = Basic.consume(chan, @request_q, nil, no_ack: false)
 
     Logger.info("Infracciones.AMQP conectado y escuchando #{@request_q}")
@@ -116,7 +115,7 @@ defmodule Libremarket.Infracciones.AMQP do
     Logger.info("Mensaje recibido: #{inspect(payload)}")
 
     %{"id_compra" => id} = Jason.decode!(payload)
-    infr? = Libremarket.Infracciones.detectar_infraccion(id)
+    infr? = Libremarket.Infracciones.Server.detectar_infraccion(id)
     response = Jason.encode!(%{id_compra: id, infraccion: infr?})
 
     {:ok, _} = Queue.declare(chan, @response_q, durable: false, auto_delete: false)

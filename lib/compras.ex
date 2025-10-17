@@ -11,7 +11,6 @@ defmodule Libremarket.Compras do
     with {:ok, producto} <- seleccionar_producto_normalizado(id_producto),
          {:ok, precio_envio} <- calcular_envio_si_corresponde(forma_envio),
          :ok <- reservar_producto(id_producto),
-         :ok <- validar_infracciones!(id_producto),
          :ok <- autorizar_pago!(),
          :ok <- despachar_si_correo(forma_envio) do
       # Confirmamos estado del producto tras el flujo
@@ -88,12 +87,14 @@ defmodule Libremarket.Compras do
 
 # === Paso 4: validaciones (infracciones, pago) con compensación ===
   defp validar_infracciones!(id_producto) do
+    require Logger
     # Publicamos la solicitud de verificación en AMQP
+    Logger.info("Entro 1")
     :ok = Libremarket.Compras.AMQP.publish_verificacion(id_producto)
+    Logger.info("Entro 2")
 
     # En este punto no esperamos respuesta inmediata:
     # la compra queda "pendiente de verificación"
-    require Logger
     Logger.info("Compra #{id_producto}: verificación de infracciones publicada (async)")
     :ok
   end
@@ -163,11 +164,6 @@ defmodule Libremarket.Compras.Server do
   # -- GenServer callbacks --
   @impl true
   def init(state) do
-    case Libremarket.Compras.AMQP.start_link(%{}) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _}} -> :ok
-      other -> require Logger; Logger.error("AMQP no arrancó: #{inspect(other)}")
-    end
     {:ok, state}
   end
 
@@ -178,15 +174,26 @@ defmodule Libremarket.Compras.Server do
 
     result = Libremarket.Compras.comprar(id_producto, forma_envio, forma_pago)
 
-    reply =
+    # Creamos siempre la compra en estado "en_proceso"
+    data_base =
       case result do
-        {:ok, data}    -> {:ok, Map.put(data, :id, compra_id)}
-        {:error, data} -> {:error, Map.put(data, :id, compra_id)}
+        {:ok, data}    -> Map.put(data, :id, compra_id)
+        {:error, data} -> Map.put(data, :id, compra_id)
       end
 
-    # Guardar la compra en el estado
-    nuevo_compras = Map.put(compras, compra_id, reply)
-    {:reply, reply, %{st | next_id: compra_id, compras: nuevo_compras}}
+    compra_en_proceso =
+      Map.merge(data_base, %{
+        motivo: :verificacion_pendiente,
+        infraccion: nil
+      })
+
+    # Guardamos con estado intermedio
+    nuevo_compras = Map.put(compras, compra_id, {:en_proceso, compra_en_proceso})
+
+    Libremarket.Compras.AMQP.publish_verificacion(compra_id)
+
+    {:reply, {:en_proceso, compra_en_proceso}, %{st | next_id: compra_id, compras: nuevo_compras}}
+
   end
 
   def handle_call({:actualizar_compra, id_compra, cambios}, _from, %{compras: compras} = state) do
@@ -224,33 +231,44 @@ defmodule Libremarket.Compras.Server do
   @impl true
   def handle_call({:procesar_infraccion, id_compra, infr?}, _from, %{compras: compras} = st) do
     case Map.get(compras, id_compra) do
-      {:ok, compra} ->
+      {:en_proceso, compra} ->
         compra2 = Map.put(compra, :infraccion, infr?)
 
         if infr? do
-          # ⚠️ transformar a error y registrar motivo
+          # ⚠️ pasa a estado de error
           compra_err =
             compra2
+            |> Map.put(:estado, :error)
             |> Map.put(:motivo, :infraccion_detectada)
 
           nuevo = Map.put(compras, id_compra, {:error, compra_err})
           {:reply, {:error, compra_err}, %{st | compras: nuevo}}
         else
-          # ✅ se mantiene ok, solo anotamos
-          nuevo = Map.put(compras, id_compra, {:ok, compra2})
-          {:reply, {:ok, compra2}, %{st | compras: nuevo}}
+          # ✅ pasa a estado ok
+          compra_ok =
+            compra2
+            |> Map.put(:estado, :ok)
+            |> Map.put(:motivo, :sin_infraccion)
+
+          nuevo = Map.put(compras, id_compra, {:ok, compra_ok})
+          {:reply, {:ok, compra_ok}, %{st | compras: nuevo}}
         end
 
+      {:ok, compra} ->
+        # Ya estaba aprobada, solo actualizamos infracción
+        nuevo = Map.put(compras, id_compra, {:ok, Map.put(compra, :infraccion, infr?)})
+        {:reply, {:ok, Map.put(compra, :infraccion, infr?)}, %{st | compras: nuevo}}
+
       {:error, compra} ->
-        # Ya venía en error (p.ej. pago), solo registramos el dato de infracción
-        compra2 = Map.put(compra, :infraccion, infr?)
-        nuevo = Map.put(compras, id_compra, {:error, compra2})
-        {:reply, {:error, compra2}, %{st | compras: nuevo}}
+        # Ya estaba en error (pago u otra cosa)
+        nuevo = Map.put(compras, id_compra, {:error, Map.put(compra, :infraccion, infr?)})
+        {:reply, {:error, Map.put(compra, :infraccion, infr?)}, %{st | compras: nuevo}}
 
       nil ->
         {:reply, {:error, :no_encontrada}, st}
     end
   end
+
 
 end
 
