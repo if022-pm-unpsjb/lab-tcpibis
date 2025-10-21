@@ -10,7 +10,6 @@ defmodule Libremarket.Supervisor do
 
   @impl true
   def init(_opts) do
-
     topologies = [
       gossip: [
         strategy: Cluster.Strategy.Gossip,
@@ -24,19 +23,22 @@ defmodule Libremarket.Supervisor do
       ]
     ]
 
-    server_to_run = case System.get_env("SERVER_TO_RUN") do
-      nil -> []
-      server_to_run -> [{String.to_existing_atom(server_to_run), %{}}]
-    end
+    server_to_run =
+      case System.get_env("SERVER_TO_RUN") do
+        nil -> []
+        server_to_run -> [{String.to_existing_atom(server_to_run), %{}}]
+      end
 
-    amqp_to_run = case System.get_env("AMQP_TO_RUN") do
-      nil -> []
-      amqp_to_run -> [{String.to_existing_atom(amqp_to_run), %{}}]
-    end
+    amqp_to_run =
+      case System.get_env("AMQP_TO_RUN") do
+        nil -> []
+        amqp_to_run -> [{String.to_existing_atom(amqp_to_run), %{}}]
+      end
 
-    childrens = [
-      {Cluster.Supervisor, [topologies, [name: Libremarket.ClusterSupervisor]]},
-    ] ++ server_to_run ++ amqp_to_run
+    childrens =
+      [
+        {Cluster.Supervisor, [topologies, [name: Libremarket.ClusterSupervisor]]}
+      ] ++ server_to_run ++ amqp_to_run
 
     Supervisor.init(childrens, strategy: :one_for_one)
   end

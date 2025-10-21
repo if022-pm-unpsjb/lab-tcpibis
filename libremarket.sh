@@ -35,7 +35,7 @@
         -e MIX_HOME=/app/mix_home -e HEX_HOME=/app/hex_home \
         --network host \
         elixir:1.15.7-alpine \
-        sh -lc 'mix local.hex --force && mix local.rebar --force && mix deps.get && mix deps.compile && mix compile'
+        sh -lc 'mix local.hex --force && mix local.rebar --force && mix deps.get && mix deps.compile && mix compile && mix format'
         shift
         start "$@"
     else

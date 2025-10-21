@@ -12,14 +12,16 @@ defmodule Libremarket.Rest do
   use Plug.ErrorHandler
   import Plug.Conn
 
-  plug Plug.Logger
-  plug Plug.Parsers,
+  plug(Plug.Logger)
+
+  plug(Plug.Parsers,
     parsers: [:json, :multipart, :urlencoded],
     pass: ["*/*"],
     json_decoder: Jason
+  )
 
-  plug :match
-  plug :dispatch
+  plug(:match)
+  plug(:dispatch)
 
   # --- Rutas ---
 
@@ -29,12 +31,13 @@ defmodule Libremarket.Rest do
 
   # Iniciar compra
   post "/compras" do
-    with %{"id_producto" => id_producto, "forma_envio" => fe, "forma_pago" => fp} <- conn.body_params,
+    with %{"id_producto" => id_producto, "forma_envio" => fe, "forma_pago" => fp} <-
+           conn.body_params,
          {:ok, forma_envio} <- parse_envio(fe),
-         {:ok, forma_pago}  <- parse_pago(fp),
+         {:ok, forma_pago} <- parse_pago(fp),
          reply <- Libremarket.Compras.Server.comprar(id_producto, forma_envio, forma_pago) do
       case reply do
-        {:ok, data}    -> json(conn, 201, data)
+        {:ok, data} -> json(conn, 201, data)
         {:error, data} -> json(conn, 422, data)
       end
     else
@@ -47,8 +50,9 @@ defmodule Libremarket.Rest do
     id = safe_int(id)
 
     case Libremarket.Compras.Server.obtener_compra(id) do
-      {:ok, data}    -> json(conn, 200, data)
-      {:error, data} -> json(conn, 200, data)   # devolvés el intento con estado de error
+      {:ok, data} -> json(conn, 200, data)
+      # devolvés el intento con estado de error
+      {:error, data} -> json(conn, 200, data)
       :no_encontrada -> json(conn, 404, %{error: "no_encontrada"})
     end
   end
@@ -56,6 +60,7 @@ defmodule Libremarket.Rest do
   # Actualizar compra (parcial)
   put "/compras/:id" do
     id = safe_int(id)
+
     cambios =
       conn.body_params
       |> Map.take(["producto", "pago", "envio", "precio_envio", "motivo"])
@@ -63,17 +68,18 @@ defmodule Libremarket.Rest do
 
     case Libremarket.Compras.Server.actualizar_compra(id, cambios) do
       {:ok, compra_actualizada} -> json(conn, 200, compra_actualizada)
-      {:error, :no_encontrada}  -> json(conn, 404, %{error: "no_encontrada"})
-      {:error, data}            -> json(conn, 422, data)
-      other                     -> json(conn, 500, %{error: "respuesta_desconocida", detalle: inspect(other)})
+      {:error, :no_encontrada} -> json(conn, 404, %{error: "no_encontrada"})
+      {:error, data} -> json(conn, 422, data)
+      other -> json(conn, 500, %{error: "respuesta_desconocida", detalle: inspect(other)})
     end
   end
 
   # Eliminar compra
   delete "/compras/:id" do
     id = safe_int(id)
+
     case Libremarket.Compras.Server.eliminar_compra(id) do
-      :ok   -> send_resp(conn, 204, "")
+      :ok -> send_resp(conn, 204, "")
       other -> json(conn, 500, %{error: "no_se_pudo_eliminar", detalle: inspect(other)})
     end
   end
@@ -99,7 +105,7 @@ defmodule Libremarket.Rest do
 
   defp parse_envio("correo"), do: {:ok, :correo}
   defp parse_envio("retira"), do: {:ok, :retira}
-  defp parse_envio(_),        do: {:error, :envio_invalido}
+  defp parse_envio(_), do: {:error, :envio_invalido}
 
   # Podés whitelistear medios de pago que uses en tu dominio; si no, convertir a átomo bajo riesgo.
   defp parse_pago(p) when is_binary(p) do
@@ -108,21 +114,23 @@ defmodule Libremarket.Rest do
       "td" -> {:ok, :td}
       "tc" -> {:ok, :tc}
       "mp" -> {:ok, :mp}
-      _    -> {:ok, String.to_atom(p)} # si querés permitir cualquier símbolo controlado por vos
+      # si querés permitir cualquier símbolo controlado por vos
+      _ -> {:ok, String.to_atom(p)}
     end
   end
+
   defp parse_pago(_), do: {:error, :pago_invalido}
 
   defp normalize_updates(map) do
     map
     |> maybe_atomize_key("envio", &parse_envio_strict/1)
-    |> maybe_atomize_key("pago",  &String.to_atom/1)
+    |> maybe_atomize_key("pago", &String.to_atom/1)
     |> keys_to_atoms()
   end
 
   defp parse_envio_strict("correo"), do: :correo
   defp parse_envio_strict("retira"), do: :retira
-  defp parse_envio_strict(other),    do: String.to_atom(other)
+  defp parse_envio_strict(other), do: String.to_atom(other)
 
   defp maybe_atomize_key(map, key, fun) do
     case Map.fetch(map, key) do

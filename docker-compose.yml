@@ -31,10 +31,14 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
     command: 
       elixir --sname envios --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
@@ -68,10 +72,14 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
     command: 
       elixir --sname pagos --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
@@ -85,10 +93,14 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
     command: 
       elixir --sname ventas --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
  
   rest:
