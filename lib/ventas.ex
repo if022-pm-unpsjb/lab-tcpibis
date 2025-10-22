@@ -1,16 +1,16 @@
 defmodule Libremarket.Ventas do
   def productos_disponibles() do
     %{
-      1 => %{nombre: "Zapatillas Adadis", cantidad: :rand.uniform(3)},
-      2 => %{nombre: "Piluso bokita", cantidad: :rand.uniform(3)},
-      3 => %{nombre: "Don satur saladas", cantidad: :rand.uniform(3)},
-      4 => %{nombre: "Mate de calabaza", cantidad: :rand.uniform(3)},
-      5 => %{nombre: "Pañuelo seca lagrimas", cantidad: :rand.uniform(3)},
-      6 => %{nombre: "Gorra pumita", cantidad: :rand.uniform(3)},
-      7 => %{nombre: "Piluso velez", cantidad: :rand.uniform(3)},
-      8 => %{nombre: "Piluso newells", cantidad: :rand.uniform(3)},
-      9 => %{nombre: "Piluso river", cantidad: :rand.uniform(3)},
-      10 => %{nombre: "Taza verde", cantidad: :rand.uniform(3)}
+      1 => %{nombre: "Zapatillas Adadis", cantidad: :rand.uniform(10)},
+      2 => %{nombre: "Piluso bokita", cantidad: :rand.uniform(10)},
+      3 => %{nombre: "Don satur saladas", cantidad: :rand.uniform(10)},
+      4 => %{nombre: "Mate de calabaza", cantidad: :rand.uniform(10)},
+      5 => %{nombre: "Pañuelo seca lagrimas", cantidad: :rand.uniform(10)},
+      6 => %{nombre: "Gorra pumita", cantidad: :rand.uniform(10)},
+      7 => %{nombre: "Piluso velez", cantidad: :rand.uniform(10)},
+      8 => %{nombre: "Piluso newells", cantidad: :rand.uniform(10)},
+      9 => %{nombre: "Piluso river", cantidad: :rand.uniform(10)},
+      10 => %{nombre: "Taza verde", cantidad: :rand.uniform(10)}
     }
   end
 

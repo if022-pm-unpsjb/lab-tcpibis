@@ -1,7 +1,7 @@
 defmodule Libremarket.Infracciones do
   def detectar_infraccion(_id_compra) do
     probabilidad = :rand.uniform(100)
-    probabilidad > 90
+    probabilidad > 70
   end
 end
 
