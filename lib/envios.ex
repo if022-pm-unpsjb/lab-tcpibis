@@ -83,10 +83,7 @@ defmodule Libremarket.Envio.AMQP do
 
   @impl true
   def init(_state) do
-    amqp_url =
-      System.get_env("AMQP_URL") ||
-        "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
-
+    amqp_url = System.get_env("AMQP_URL")
     {:ok, conn} = Connection.open(amqp_url, ssl_options: [verify: :verify_none])
     {:ok, chan} = Channel.open(conn)
 

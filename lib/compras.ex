@@ -206,10 +206,7 @@ defmodule Libremarket.Compras.AMQP do
 
   @impl true
   def init(_) do
-    amqp_url =
-      System.get_env("AMQP_URL") ||
-        "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
-
+    amqp_url = System.get_env("AMQP_URL")
     {:ok, conn} = Connection.open(amqp_url, ssl_options: [verify: :verify_none])
     {:ok, chan} = Channel.open(conn)
     {:ok, _} = Queue.declare(chan, @infracciones_resp_q, durable: false)
