@@ -1,21 +1,7 @@
 services:
-  simulador:
-    image: elixir:alpine
-    container_name: simulador
-    network_mode: "host"
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-    command: 
-      elixir --sname simulador --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    user: "${DOCKER_UID}:${DOCKER_GID}"
 
   infracciones:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: infracciones
     network_mode: "host"
     volumes:
@@ -24,15 +10,19 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
     command: 
       elixir --sname infracciones --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
   envios:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: envios
     network_mode: "host"
     volumes:
@@ -41,15 +31,19 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
     command: 
       elixir --sname envios --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
   compras:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: compras
     network_mode: "host"
     volumes:
@@ -58,14 +52,18 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
     command: 
       elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
   pagos:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: pagos
     network_mode: "host"
     volumes:
@@ -74,15 +72,19 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
     command: 
       elixir --sname pagos --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
 
   ventas:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: ventas
     network_mode: "host"
     volumes:
@@ -91,14 +93,18 @@ services:
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
     command: 
       elixir --sname ventas --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
  
   rest:
-    image: elixir:alpine
+    image: elixir:1.15.7-alpine
     container_name: rest
     network_mode: "host"              # igual que los demás
     volumes:

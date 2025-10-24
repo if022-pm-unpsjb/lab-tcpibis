@@ -1,0 +1,7 @@
+Simulador.simular_compras_secuencial(25)
+Simulador.simular_compras_async(25)
+Simulador.simular_compra
+Libremarket.Compras.Server.obtener_compras
+Libremarket.Compras.Server.obtener_compra(1)
+Libremarket.Infracciones.Server.listar_infracciones
+Libremarket.Pagos.Server.obtener_pagos
