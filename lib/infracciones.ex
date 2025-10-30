@@ -11,14 +11,33 @@ defmodule Libremarket.Infracciones.Server do
   """
 
   use GenServer
+  require Logger
 
   @global_name {:global, __MODULE__}
+  @replicas [
+    {:infraccionesr1@facu, Elixir.Libremarket.Infracciones.Server},
+    {:infraccionesr2@facu, Elixir.Libremarket.Infracciones.Server}
+  ]
 
   @doc """
   Crea un nuevo servidor de Infracciones
   """
   def start_link(opts \\ %{}) do
-    GenServer.start_link(__MODULE__, opts, name: @global_name)
+    container_name = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+
+    {:global, base_name} = @global_name
+
+    name =
+      if is_primary do
+        @global_name
+      else
+        {:global, :"#{base_name}_#{container_name}"}
+      end
+
+    IO.puts("📡nombre #{inspect(name)}")
+
+    GenServer.start_link(__MODULE__, opts, name: name)
   end
 
   def detectar_infraccion(pid \\ @global_name, id_compra) do
@@ -27,6 +46,10 @@ defmodule Libremarket.Infracciones.Server do
 
   def listar_infracciones() do
     GenServer.call(@global_name, :listar_infracciones)
+  end
+
+  def actualizar_estado() do
+    GenServer.call(@global_name, :actualizar_estado)
   end
 
   @doc """
@@ -42,14 +65,82 @@ defmodule Libremarket.Infracciones.Server do
   """
   @impl true
   def handle_call({:detectar_infraccion, id_compra}, _from, state) do
-    infraccion = Libremarket.Infracciones.detectar_infraccion(id_compra)
-    new_state = Map.put(state, id_compra, infraccion)
-    {:reply, infraccion, new_state}
+    primario = System.get_env("PRIMARY") == "true"
+
+    if primario do
+      infraccion = Libremarket.Infracciones.detectar_infraccion(id_compra)
+      new_state = Map.put(state, id_compra, infraccion)
+      replicar_estado(new_state)
+      {:reply, infraccion, new_state}
+    else
+      Logger.warning("Nodo réplica no debe detectar infracciones directamente")
+      {:reply, :replica, state}
+    end
   end
 
   @impl true
   def handle_call(:listar_infracciones, _from, state) do
     {:reply, state, state}
+  end
+
+  @impl true
+  def handle_call(:actualizar_estado, _from, state) do
+    {:reply, state, state}
+  end
+
+  @impl true
+  def handle_cast({:sync_state, new_state}, _state) do
+    Logger.info("📡 Estado actualizado desde primario (#{map_size(new_state)} entradas)")
+    {:noreply, new_state}
+  end
+
+  @impl true
+  def handle_call({:sync_state, new_state}, _from, _old_state) do
+    Logger.info("📡 Estado sincronizado por llamada directa (#{map_size(new_state)} entradas)")
+    {:reply, :ok, new_state}
+  end
+
+  # =======================
+  # Replicación RPC
+  # =======================
+  defp replicar_estado(state) do
+    Enum.each(@replicas, fn {nodo, mod} ->
+      Logger.info("📤 Replicando estado a #{nodo}")
+
+      try do
+        case :rpc.call(nodo, mod, :sincronizar_estado_remoto, [state]) do
+          :ok -> Logger.info("✅ Estado sincronizado con #{nodo}")
+          other -> Logger.warning("⚠️ Respuesta inesperada de #{nodo}: #{inspect(other)}")
+        end
+      catch
+        :exit, reason ->
+          Logger.error("❌ Error replicando a #{nodo}: #{inspect(reason)}")
+      end
+    end)
+  end
+
+  def sincronizar_estado_remoto(new_state) do
+    container_name = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+
+    {:global, base_name} = @global_name
+
+    local_name =
+      if is_primary do
+        @global_name
+      else
+        {:global, :"#{base_name}_#{container_name}"}
+      end
+
+    Logger.info("📥 Recibido nuevo estado en #{inspect(local_name)}")
+    GenServer.call(local_name, {:sync_state, new_state})
+    :ok
+  end
+
+  def sincronizar_estado(new_state) do
+    Logger.info(" → recibido nuevo estado #{new_state}")
+    GenServer.cast(@global_name, {:sync_state, new_state})
+    :ok
   end
 end
 

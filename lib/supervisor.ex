@@ -30,9 +30,13 @@ defmodule Libremarket.Supervisor do
       end
 
     amqp_to_run =
-      case System.get_env("AMQP_TO_RUN") do
-        nil -> []
-        amqp_to_run -> [{String.to_existing_atom(amqp_to_run), %{}}]
+      if System.get_env("PRIMARY") == "true" do
+        case System.get_env("AMQP_TO_RUN") do
+          nil -> []
+          amqp_to_run -> [{String.to_existing_atom(amqp_to_run), %{}}]
+        end
+      else
+        []
       end
 
     childrens =

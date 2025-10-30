@@ -1,8 +1,8 @@
 services:
 
-  infracciones:
+  infraccionesp:
     image: elixir:1.15.7-alpine
-    container_name: infracciones
+    container_name: infraccionesp
     network_mode: "host"
     volumes:
       - ./:/app
@@ -13,8 +13,54 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
+      PRIMARY: true
+      CONTAINER_NAME: infraccionesp
     command: 
-      elixir --sname infracciones --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      elixir --sname infraccionesp --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+  
+  infraccionesr1:
+    image: elixir:1.15.7-alpine
+    container_name: infraccionesr1
+    network_mode: "host"
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
+      PRIMARY: false
+      CONTAINER_NAME: infraccionesr1
+    command: 
+      elixir --sname infraccionesr1 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+ 
+  infraccionesr2:
+    image: elixir:1.15.7-alpine
+    container_name: infraccionesr2
+    network_mode: "host"
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
+      PRIMARY: false
+      CONTAINER_NAME: infraccionesr2
+    command: 
+      elixir --sname infraccionesr2 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     stdin_open: true
     tty: true
@@ -34,6 +80,7 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
       AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
+      PRIMARY: true
     command: 
       elixir --sname envios --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
@@ -55,6 +102,7 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
       AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
+      PRIMARY: true
     command: 
       elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
@@ -75,6 +123,7 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
       AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
+      PRIMARY: true
     command: 
       elixir --sname pagos --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
@@ -96,6 +145,7 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
       AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
+      PRIMARY: true
     command: 
       elixir --sname ventas --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
