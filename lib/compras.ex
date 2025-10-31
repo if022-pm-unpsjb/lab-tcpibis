@@ -41,11 +41,36 @@ end
 defmodule Libremarket.Compras.Server do
   @moduledoc "Servidor de Compras: genera IDs y delega en `Libremarket.Compras`."
   use GenServer
+  require Logger
 
   @global_name {:global, __MODULE__}
 
   def start_link(_opts \\ %{}) do
-    GenServer.start_link(__MODULE__, %{next_id: 0, compras: %{}}, name: @global_name)
+    container_name = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+
+    {:global, base_name} = @global_name
+
+    name =
+      if is_primary do
+        @global_name
+      else
+        {:global, :"#{base_name}_#{container_name}"}
+      end
+
+    IO.puts("📡nombre #{inspect(name)}")
+
+    GenServer.start_link(__MODULE__, %{next_id: 0, compras: %{}}, name: name)
+  end
+
+  def replicas() do
+    {:ok, hostname} = :inet.gethostname()
+    hostname_str = List.to_string(hostname)
+
+    [
+      {String.to_atom("compras_replica_1@#{hostname_str}"), __MODULE__},
+      {String.to_atom("compras_replica_2@#{hostname_str}"), __MODULE__}
+    ]
   end
 
   @spec comprar(pid | atom, integer, :correo | :retira, atom, non_neg_integer) ::
@@ -81,47 +106,56 @@ defmodule Libremarket.Compras.Server do
         _from,
         %{next_id: id, compras: compras} = st
       ) do
-    compra_id = id + 1
+    primario = System.get_env("PRIMARY") == "true"
 
-    result = Libremarket.Compras.comprar(id_producto, forma_envio, forma_pago)
+    if primario do
+      compra_id = id + 1
 
-    data_base =
-      case result do
-        {:ok, data} -> Map.put(data, :id, compra_id)
-        {:error, data} -> Map.put(data, :id, compra_id)
+      result = Libremarket.Compras.comprar(id_producto, forma_envio, forma_pago)
+
+      data_base =
+        case result do
+          {:ok, data} -> Map.put(data, :id, compra_id)
+          {:error, data} -> Map.put(data, :id, compra_id)
+        end
+
+      compra_en_proceso =
+        Map.merge(data_base, %{
+          infraccion: nil
+        })
+
+      nuevo_compras = Map.put(compras, compra_id, {:en_proceso, compra_en_proceso})
+
+      Libremarket.Compras.AMQP.publish_verificacion(compra_id)
+      Libremarket.Compras.AMQP.publish_pago(compra_id)
+
+      case compra_en_proceso[:envio] do
+        :correo ->
+          Libremarket.Compras.AMQP.publish_envio(compra_id, "agendar")
+          Libremarket.Compras.AMQP.publish_envio(compra_id, "enviar")
+
+        _ ->
+          :ok
       end
 
-    compra_en_proceso =
-      Map.merge(data_base, %{
-        infraccion: nil
-      })
+      Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "seleccionar")
+      Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "reservar")
 
-    nuevo_compras = Map.put(compras, compra_id, {:en_proceso, compra_en_proceso})
+      case result do
+        {:error, %{motivo: :pago_rechazado}} ->
+          Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "liberar")
 
-    Libremarket.Compras.AMQP.publish_verificacion(compra_id)
-    Libremarket.Compras.AMQP.publish_pago(compra_id)
+        _ ->
+          :ok
+      end
 
-    case compra_en_proceso[:envio] do
-      :correo ->
-        Libremarket.Compras.AMQP.publish_envio(compra_id, "agendar")
-        Libremarket.Compras.AMQP.publish_envio(compra_id, "enviar")
-
-      _ ->
-        :ok
+      new_state = %{st | next_id: compra_id, compras: nuevo_compras}
+      replicar_estado(new_state)
+      {:reply, {:en_proceso, compra_en_proceso}, new_state}
+    else
+      Logger.warning("Nodo réplica no debe ejecutar compras directamente")
+      {:reply, :replica, st}
     end
-
-    Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "seleccionar")
-    Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "reservar")
-
-    case result do
-      {:error, %{motivo: :pago_rechazado}} ->
-        Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "liberar")
-
-      _ ->
-        :ok
-    end
-
-    {:reply, {:en_proceso, compra_en_proceso}, %{st | next_id: compra_id, compras: nuevo_compras}}
   end
 
   @impl true
@@ -134,9 +168,15 @@ defmodule Libremarket.Compras.Server do
     case Map.get(compras, id_compra) do
       {estado_actual, compra} when estado_actual in [:en_proceso, :ok, :error] ->
         compra2 = Map.merge(compra, cambios)
-
         nuevo_compras = Map.put(compras, id_compra, {estado_actual, compra2})
-        {:reply, {estado_actual, compra2}, %{st | compras: nuevo_compras}}
+
+        new_state = %{st | compras: nuevo_compras}
+        # 🔁 si es primario, replicar
+        if System.get_env("PRIMARY") == "true" do
+          replicar_estado(new_state)
+        end
+
+        {:reply, {estado_actual, compra2}, new_state}
 
       nil ->
         {:reply, {:error, :no_encontrada}, st}
@@ -161,29 +201,98 @@ defmodule Libremarket.Compras.Server do
       {:en_proceso, compra} ->
         compra2 = Map.put(compra, :infraccion, infr?)
 
-        if infr? or compra2[:pago_estado] == :rechazado or compra2[:motivo] == :sin_stock do
-          nuevo = Map.put(compras, id_compra, {:error, compra2})
-          {:reply, {:error, compra2}, %{st | compras: nuevo}}
-        else
-          nuevo = Map.put(compras, id_compra, {:ok, compra2})
-          {:reply, {:ok, compra2}, %{st | compras: nuevo}}
+        new_compras =
+          if infr? or compra2[:pago_estado] == :rechazado or compra2[:motivo] == :sin_stock do
+            Map.put(compras, id_compra, {:error, compra2})
+          else
+            Map.put(compras, id_compra, {:ok, compra2})
+          end
+
+        new_state = %{st | compras: new_compras}
+
+        # 🔁 Agregá esta línea para replicar el estado a las réplicas
+        if System.get_env("PRIMARY") == "true" do
+          replicar_estado(new_state)
         end
 
+        {:reply, Map.get(new_compras, id_compra), new_state}
+
       {:ok, compra} ->
-        nuevo = Map.put(compras, id_compra, {:ok, Map.put(compra, :infraccion, infr?)})
-        {:reply, {:ok, Map.put(compra, :infraccion, infr?)}, %{st | compras: nuevo}}
+        compra2 = Map.put(compra, :infraccion, infr?)
+        new_state = %{st | compras: Map.put(compras, id_compra, {:ok, compra2})}
+
+        if System.get_env("PRIMARY") == "true" do
+          replicar_estado(new_state)
+        end
+
+        {:reply, {:ok, compra2}, new_state}
 
       {:error, compra} ->
-        nuevo = Map.put(compras, id_compra, {:error, Map.put(compra, :infraccion, infr?)})
-        {:reply, {:error, Map.put(compra, :infraccion, infr?)}, %{st | compras: nuevo}}
+        compra2 = Map.put(compra, :infraccion, infr?)
+        new_state = %{st | compras: Map.put(compras, id_compra, {:error, compra2})}
+
+        if System.get_env("PRIMARY") == "true" do
+          replicar_estado(new_state)
+        end
+
+        {:reply, {:error, compra2}, new_state}
 
       nil ->
         {:reply, {:error, :no_encontrada}, st}
     end
   end
 
+  @impl true
+  def handle_call({:sync_state, new_state}, _from, _old_state) do
+    Logger.info("📡 Estado sincronizado por llamada directa (#{map_size(new_state)} entradas)")
+    {:reply, :ok, new_state}
+  end
+
+  @impl true
+  def handle_cast({:sync_state, new_state}, _state) do
+    Logger.info("📡 Estado actualizado desde primario (#{map_size(new_state)} entradas)")
+    {:noreply, new_state}
+  end
+
   def procesar_infraccion(pid \\ @global_name, id_compra, infraccion?) do
     GenServer.call(pid, {:procesar_infraccion, id_compra, infraccion?})
+  end
+
+  # =======================
+  # Replicación RPC
+  # =======================
+  defp replicar_estado(state) do
+    Enum.each(replicas(), fn {nodo, mod} ->
+      Logger.info("📤 Replicando estado a #{nodo}")
+
+      try do
+        case :rpc.call(nodo, mod, :sincronizar_estado_remoto, [state]) do
+          :ok -> Logger.info("✅ Estado sincronizado con #{nodo}")
+          other -> Logger.warning("⚠️ Respuesta inesperada de #{nodo}: #{inspect(other)}")
+        end
+      catch
+        :exit, reason ->
+          Logger.error("❌ Error replicando a #{nodo}: #{inspect(reason)}")
+      end
+    end)
+  end
+
+  def sincronizar_estado_remoto(new_state) do
+    container_name = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+
+    {:global, base_name} = @global_name
+
+    local_name =
+      if is_primary do
+        @global_name
+      else
+        {:global, :"#{base_name}_#{container_name}"}
+      end
+
+    Logger.info("📥 Recibido nuevo estado en #{inspect(local_name)}")
+    GenServer.call(local_name, {:sync_state, new_state})
+    :ok
   end
 end
 

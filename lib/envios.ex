@@ -28,16 +28,20 @@ defmodule Libremarket.Envio.Server do
     GenServer.start_link(__MODULE__, opts, name: @global_name)
   end
 
-  def calcular_costo_envio(pid \\ @global_name) do
-    GenServer.call(pid, :calcular_costo_envio)
+  def calcular_costo_envio(pid \\ @global_name, id_compra) do
+    GenServer.call(pid, {:calcular_costo_envio, id_compra})
   end
 
-  def enviar_producto(pid \\ @global_name) do
-    GenServer.call(pid, :enviar_producto)
+  def enviar_producto(pid \\ @global_name, id_compra, costo) do
+    GenServer.call(pid, {:enviar_producto, id_compra, costo})
   end
 
-  def agendar_envio(pid \\ @global_name) do
-    GenServer.call(pid, :agendar_envio)
+  def agendar_envio(pid \\ @global_name, id_compra) do
+    GenServer.call(pid, {:agendar_envio, id_compra})
+  end
+
+  def obtener_envios() do
+    GenServer.call(@global_name, :obtener_envios)
   end
 
   @doc """
@@ -49,21 +53,28 @@ defmodule Libremarket.Envio.Server do
   end
 
   @impl true
-  def handle_call(:calcular_costo_envio, _from, state) do
+  def handle_call({:calcular_costo_envio, id_compra}, _from, state) do
     result = Libremarket.Envio.calcular_costo_envio()
-    {:reply, result, state}
+    new_state = Map.put(state, id_compra, result)
+    {:reply, result, new_state}
   end
 
   @impl true
-  def handle_call(:enviar_producto, _from, state) do
-    result = Libremarket.Envio.enviar_producto()
-    {:reply, result, state}
+  def handle_call({:enviar_producto, id_compra, costo}, _from, state) do
+    Libremarket.Envio.enviar_producto()
+    new_state = Map.put(state, id_compra, %{estado: :enviado, precio_envio: costo})
+    {:reply, %{estado: :enviado, precio_envio: costo}, new_state}
   end
 
   @impl true
-  def handle_call(:agendar_envio, _from, state) do
-    result = Libremarket.Envio.agendar_envio()
-    {:reply, result, state}
+  def handle_call({:agendar_envio, id_compra}, _from, state) do
+    Libremarket.Envio.agendar_envio()
+    new_state = Map.put(state, id_compra, %{estado: :agendado})
+    {:reply, %{estado: :agendado}, new_state}
+  end
+
+  def handle_call(:obtener_envios, _from, state) do
+    {:reply, state, state}
   end
 end
 
@@ -102,7 +113,7 @@ defmodule Libremarket.Envio.AMQP do
     case accion do
       "enviar" ->
         costo = Libremarket.Envio.calcular_costo_envio()
-        _ = Libremarket.Envio.Server.enviar_producto()
+        _ = Libremarket.Envio.Server.enviar_producto(id_compra, costo)
 
         resp =
           Jason.encode!(%{
@@ -115,7 +126,7 @@ defmodule Libremarket.Envio.AMQP do
         Basic.publish(chan, @exchange, @envios_resp_q, resp, content_type: "application/json")
 
       "agendar" ->
-        _ = Libremarket.Envio.Server.agendar_envio()
+        _ = Libremarket.Envio.Server.agendar_envio(id_compra)
 
         resp =
           Jason.encode!(%{

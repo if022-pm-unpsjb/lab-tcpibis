@@ -1,8 +1,8 @@
 services:
 
-  infraccionesp:
+  infracciones_principal:
     image: elixir:1.15.7-alpine
-    container_name: infraccionesp
+    container_name: infracciones_principal
     network_mode: "host"
     volumes:
       - ./:/app
@@ -14,17 +14,17 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
       PRIMARY: true
-      CONTAINER_NAME: infraccionesp
+      CONTAINER_NAME: infracciones_principal
     command: 
-      elixir --sname infraccionesp --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      elixir --sname infracciones_principal --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
   
-  infraccionesr1:
+  infracciones_replica_1:
     image: elixir:1.15.7-alpine
-    container_name: infraccionesr1
+    container_name: infracciones_replica_1
     network_mode: "host"
     volumes:
       - ./:/app
@@ -36,17 +36,17 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
       PRIMARY: false
-      CONTAINER_NAME: infraccionesr1
+      CONTAINER_NAME: infracciones_replica_1
     command: 
-      elixir --sname infraccionesr1 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      elixir --sname infracciones_replica_1 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
  
-  infraccionesr2:
+  infracciones_replica_2:
     image: elixir:1.15.7-alpine
-    container_name: infraccionesr2
+    container_name: infracciones_replica_2
     network_mode: "host"
     volumes:
       - ./:/app
@@ -58,14 +58,13 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
       PRIMARY: false
-      CONTAINER_NAME: infraccionesr2
+      CONTAINER_NAME: infracciones_replica_2
     command: 
-      elixir --sname infraccionesr2 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      elixir --sname infracciones_replica_2 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
-
 
   envios:
     image: elixir:1.15.7-alpine
@@ -88,10 +87,9 @@ services:
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-
-  compras:
+  compras_principal:
     image: elixir:1.15.7-alpine
-    container_name: compras
+    container_name: compras_principal
     network_mode: "host"
     volumes:
       - ./:/app
@@ -103,16 +101,61 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
       AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
       PRIMARY: true
+      CONTAINER_NAME: compras_principal
     command: 
-      elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      elixir --sname compras_principal --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  pagos:
+  compras_replica_1:
     image: elixir:1.15.7-alpine
-    container_name: pagos
+    container_name: compras_replica_1
+    network_mode: "host"
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
+      PRIMARY: false
+      CONTAINER_NAME: compras_replica_1
+    command: 
+      elixir --sname compras_replica_1 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  compras_replica_2:
+    image: elixir:1.15.7-alpine
+    container_name: compras_replica_2
+    network_mode: "host"
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
+      PRIMARY: false
+      CONTAINER_NAME: compras_replica_2
+    command: 
+      elixir --sname compras_replica_2 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  pagos_principal:
+    image: elixir:1.15.7-alpine
+    container_name: pagos_principal
     network_mode: "host"
     volumes:
       - ./:/app
@@ -124,13 +167,57 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
       AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
       PRIMARY: true
+      CONTAINER_NAME: pagos_principal
     command: 
-      elixir --sname pagos --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+      elixir --sname pagos_principal --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
     # para habilitar -it
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
+  pagos_replica_1:
+    image: elixir:1.15.7-alpine
+    container_name: pagos_replica_1
+    network_mode: "host"
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
+      PRIMARY: false
+      CONTAINER_NAME: pagos_replica_1
+    command: 
+      elixir --sname pagos_replica_1 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  pagos_replica_2:
+    image: elixir:1.15.7-alpine
+    container_name: pagos_replica_2
+    network_mode: "host"
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
+      AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
+      PRIMARY: false
+      CONTAINER_NAME: pagos_replica_2
+    command: 
+      elixir --sname pagos_replica_2 --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
 
   ventas:
     image: elixir:1.15.7-alpine

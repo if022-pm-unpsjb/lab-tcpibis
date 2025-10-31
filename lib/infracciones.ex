@@ -14,10 +14,6 @@ defmodule Libremarket.Infracciones.Server do
   require Logger
 
   @global_name {:global, __MODULE__}
-  @replicas [
-    {:infraccionesr1@facu, Elixir.Libremarket.Infracciones.Server},
-    {:infraccionesr2@facu, Elixir.Libremarket.Infracciones.Server}
-  ]
 
   @doc """
   Crea un nuevo servidor de Infracciones
@@ -38,6 +34,16 @@ defmodule Libremarket.Infracciones.Server do
     IO.puts("📡nombre #{inspect(name)}")
 
     GenServer.start_link(__MODULE__, opts, name: name)
+  end
+
+  def replicas() do
+    {:ok, hostname} = :inet.gethostname()
+    hostname_str = List.to_string(hostname)
+
+    [
+      {String.to_atom("infracciones_replica_1@#{hostname_str}"), __MODULE__},
+      {String.to_atom("infracciones_replica_2@#{hostname_str}"), __MODULE__}
+    ]
   end
 
   def detectar_infraccion(pid \\ @global_name, id_compra) do
@@ -89,22 +95,22 @@ defmodule Libremarket.Infracciones.Server do
   end
 
   @impl true
-  def handle_cast({:sync_state, new_state}, _state) do
-    Logger.info("📡 Estado actualizado desde primario (#{map_size(new_state)} entradas)")
-    {:noreply, new_state}
-  end
-
-  @impl true
   def handle_call({:sync_state, new_state}, _from, _old_state) do
     Logger.info("📡 Estado sincronizado por llamada directa (#{map_size(new_state)} entradas)")
     {:reply, :ok, new_state}
+  end
+
+  @impl true
+  def handle_cast({:sync_state, new_state}, _state) do
+    Logger.info("📡 Estado actualizado desde primario (#{map_size(new_state)} entradas)")
+    {:noreply, new_state}
   end
 
   # =======================
   # Replicación RPC
   # =======================
   defp replicar_estado(state) do
-    Enum.each(@replicas, fn {nodo, mod} ->
+    Enum.each(replicas(), fn {nodo, mod} ->
       Logger.info("📤 Replicando estado a #{nodo}")
 
       try do
@@ -134,12 +140,6 @@ defmodule Libremarket.Infracciones.Server do
 
     Logger.info("📥 Recibido nuevo estado en #{inspect(local_name)}")
     GenServer.call(local_name, {:sync_state, new_state})
-    :ok
-  end
-
-  def sincronizar_estado(new_state) do
-    Logger.info(" → recibido nuevo estado #{new_state}")
-    GenServer.cast(@global_name, {:sync_state, new_state})
     :ok
   end
 end
