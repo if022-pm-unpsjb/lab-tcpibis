@@ -41,6 +41,7 @@ defmodule Libremarket.Supervisor do
 
     childrens =
       [
+        {Libremarket.Replicacion.Registry, []},
         {Cluster.Supervisor, [topologies, [name: Libremarket.ClusterSupervisor]]}
       ] ++ server_to_run ++ amqp_to_run
 

@@ -5,7 +5,11 @@ Libremarket.Compras.Server.obtener_compras
 Libremarket.Compras.Server.obtener_compra(1)
 Libremarket.Infracciones.Server.listar_infracciones
 Libremarket.Pagos.Server.obtener_pagos
+Libremarket.Envio.Server.obtener_envios
+Libremarket.Ventas.Server.obtener_productos
 
+GenServer.call({:global, Libremarket.Ventas.Server_ventas_replica_1}, :obtener_productos)
+GenServer.call({:global, Libremarket.Envio.Server_envios_replica_1}, :obtener_envios)
 GenServer.call({:global, Libremarket.Pagos.Server_pagos_replica_1}, :obtener_pagos)
 GenServer.call({:global, Libremarket.Compras.Server_compras_replica_1}, :obtener_compras)
 GenServer.call({:global, Libremarket.Infracciones.Server_infracciones_replica_1}, :listar_infracciones)

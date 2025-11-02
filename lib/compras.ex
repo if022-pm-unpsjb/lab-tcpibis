@@ -42,6 +42,7 @@ defmodule Libremarket.Compras.Server do
   @moduledoc "Servidor de Compras: genera IDs y delega en `Libremarket.Compras`."
   use GenServer
   require Logger
+  alias Libremarket.Replicacion
 
   @global_name {:global, __MODULE__}
 
@@ -60,17 +61,32 @@ defmodule Libremarket.Compras.Server do
 
     IO.puts("📡nombre #{inspect(name)}")
 
-    GenServer.start_link(__MODULE__, %{next_id: 0, compras: %{}}, name: name)
+    {:ok, pid} = GenServer.start_link(__MODULE__, %{}, name: name)
+
+    Libremarket.Replicacion.Registry.registrar(__MODULE__, container_name, pid)
+
+    {:ok, pid}
   end
 
+  # PIDs de réplicas (excluye el propio PID para evitar deadlock)
   def replicas() do
-    {:ok, hostname} = :inet.gethostname()
-    hostname_str = List.to_string(hostname)
+    my_pid = GenServer.whereis(local_name())
 
-    [
-      {String.to_atom("compras_replica_1@#{hostname_str}"), __MODULE__},
-      {String.to_atom("compras_replica_2@#{hostname_str}"), __MODULE__}
-    ]
+    Libremarket.Replicacion.Registry.replicas(__MODULE__)
+    |> Enum.reject(&(&1 == my_pid))
+  end
+
+  # Nombre local (global o con sufijo de contenedor)
+  defp local_name() do
+    container = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+    {:global, base_name} = @global_name
+
+    if is_primary do
+      @global_name
+    else
+      {:global, :"#{base_name}_#{container}"}
+    end
   end
 
   @spec comprar(pid | atom, integer, :correo | :retira, atom, non_neg_integer) ::
@@ -96,8 +112,8 @@ defmodule Libremarket.Compras.Server do
   end
 
   @impl true
-  def init(state) do
-    {:ok, state}
+  def init(_state) do
+    {:ok, %{next_id: 0, compras: %{}}}
   end
 
   @impl true
@@ -121,7 +137,10 @@ defmodule Libremarket.Compras.Server do
 
       compra_en_proceso =
         Map.merge(data_base, %{
-          infraccion: nil
+          id_producto: id_producto,
+          infraccion: nil,
+          reservado: false,
+          liberado: false
         })
 
       nuevo_compras = Map.put(compras, compra_id, {:en_proceso, compra_en_proceso})
@@ -138,19 +157,12 @@ defmodule Libremarket.Compras.Server do
           :ok
       end
 
+      # Selección y reserva siempre ocurren; la liberación se decide cuando corresponda (pago/infracción)
       Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "seleccionar")
       Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "reservar")
 
-      case result do
-        {:error, %{motivo: :pago_rechazado}} ->
-          Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "liberar")
-
-        _ ->
-          :ok
-      end
-
       new_state = %{st | next_id: compra_id, compras: nuevo_compras}
-      replicar_estado(new_state)
+      Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
       {:reply, {:en_proceso, compra_en_proceso}, new_state}
     else
       Logger.warning("Nodo réplica no debe ejecutar compras directamente")
@@ -173,7 +185,7 @@ defmodule Libremarket.Compras.Server do
         new_state = %{st | compras: nuevo_compras}
         # 🔁 si es primario, replicar
         if System.get_env("PRIMARY") == "true" do
-          replicar_estado(new_state)
+          Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
 
         {:reply, {estado_actual, compra2}, new_state}
@@ -201,6 +213,15 @@ defmodule Libremarket.Compras.Server do
       {:en_proceso, compra} ->
         compra2 = Map.put(compra, :infraccion, infr?)
 
+        # Liberar si ya estaba reservado y aún no liberado
+        compra2 =
+          if infr? and compra2[:reservado] == true and compra2[:liberado] != true do
+            Libremarket.Compras.AMQP.publish_venta(id_compra, compra2[:id_producto], "liberar")
+            Map.put(compra2, :liberado, true)
+          else
+            compra2
+          end
+
         new_compras =
           if infr? or compra2[:pago_estado] == :rechazado or compra2[:motivo] == :sin_stock do
             Map.put(compras, id_compra, {:error, compra2})
@@ -210,29 +231,46 @@ defmodule Libremarket.Compras.Server do
 
         new_state = %{st | compras: new_compras}
 
-        # 🔁 Agregá esta línea para replicar el estado a las réplicas
         if System.get_env("PRIMARY") == "true" do
-          replicar_estado(new_state)
+          Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
 
         {:reply, Map.get(new_compras, id_compra), new_state}
 
       {:ok, compra} ->
         compra2 = Map.put(compra, :infraccion, infr?)
+
+        compra2 =
+          if infr? and compra2[:reservado] == true and compra2[:liberado] != true do
+            Libremarket.Compras.AMQP.publish_venta(id_compra, compra2[:id_producto], "liberar")
+            Map.put(compra2, :liberado, true)
+          else
+            compra2
+          end
+
         new_state = %{st | compras: Map.put(compras, id_compra, {:ok, compra2})}
 
         if System.get_env("PRIMARY") == "true" do
-          replicar_estado(new_state)
+          Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
 
         {:reply, {:ok, compra2}, new_state}
 
       {:error, compra} ->
         compra2 = Map.put(compra, :infraccion, infr?)
+
+        compra2 =
+          if infr? and compra2[:reservado] == true and compra2[:liberado] != true do
+            Libremarket.Compras.AMQP.publish_venta(id_compra, compra2[:id_producto], "liberar")
+            Map.put(compra2, :liberado, true)
+          else
+            compra2
+          end
+
         new_state = %{st | compras: Map.put(compras, id_compra, {:error, compra2})}
 
         if System.get_env("PRIMARY") == "true" do
-          replicar_estado(new_state)
+          Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
 
         {:reply, {:error, compra2}, new_state}
@@ -248,51 +286,8 @@ defmodule Libremarket.Compras.Server do
     {:reply, :ok, new_state}
   end
 
-  @impl true
-  def handle_cast({:sync_state, new_state}, _state) do
-    Logger.info("📡 Estado actualizado desde primario (#{map_size(new_state)} entradas)")
-    {:noreply, new_state}
-  end
-
   def procesar_infraccion(pid \\ @global_name, id_compra, infraccion?) do
     GenServer.call(pid, {:procesar_infraccion, id_compra, infraccion?})
-  end
-
-  # =======================
-  # Replicación RPC
-  # =======================
-  defp replicar_estado(state) do
-    Enum.each(replicas(), fn {nodo, mod} ->
-      Logger.info("📤 Replicando estado a #{nodo}")
-
-      try do
-        case :rpc.call(nodo, mod, :sincronizar_estado_remoto, [state]) do
-          :ok -> Logger.info("✅ Estado sincronizado con #{nodo}")
-          other -> Logger.warning("⚠️ Respuesta inesperada de #{nodo}: #{inspect(other)}")
-        end
-      catch
-        :exit, reason ->
-          Logger.error("❌ Error replicando a #{nodo}: #{inspect(reason)}")
-      end
-    end)
-  end
-
-  def sincronizar_estado_remoto(new_state) do
-    container_name = System.get_env("CONTAINER_NAME") || "default"
-    is_primary = System.get_env("PRIMARY") == "true"
-
-    {:global, base_name} = @global_name
-
-    local_name =
-      if is_primary do
-        @global_name
-      else
-        {:global, :"#{base_name}_#{container_name}"}
-      end
-
-    Logger.info("📥 Recibido nuevo estado en #{inspect(local_name)}")
-    GenServer.call(local_name, {:sync_state, new_state})
-    :ok
   end
 end
 
@@ -364,7 +359,6 @@ defmodule Libremarket.Compras.AMQP do
   def handle_cast({:pago, id_compra}, %{chan: chan} = st) do
     payload = Jason.encode!(%{id_compra: id_compra})
     :ok = Basic.publish(chan, @exchange, @pagos_req_q, payload, content_type: "application/json")
-    require Logger
     Logger.info("Compras.AMQP → publicado pago para compra #{id_compra}")
     {:noreply, st}
   end
@@ -385,14 +379,12 @@ defmodule Libremarket.Compras.AMQP do
   def handle_cast({:envio, id_compra, accion}, %{chan: chan} = st) do
     payload = Jason.encode!(%{id_compra: id_compra, accion: accion})
     :ok = Basic.publish(chan, @exchange, @envios_req_q, payload, content_type: "application/json")
-    require Logger
     Logger.info("Compras.AMQP → publicado envío '#{accion}' para compra #{id_compra}")
     {:noreply, st}
   end
 
   @impl true
   def handle_info({:basic_consume_ok, %{consumer_tag: tag}}, state) do
-    require Logger
     Logger.info("Compras.AMQP → consumo registrado (#{tag})")
     {:noreply, state}
   end
@@ -448,6 +440,18 @@ defmodule Libremarket.Compras.AMQP do
               motivo: :pago_rechazado
             })
 
+          # Intentar liberar si ya estaba reservado (y no liberado)
+          case Libremarket.Compras.Server.obtener_compra(id) do
+            {_, compra} when is_map(compra) ->
+              if compra[:reservado] == true and compra[:liberado] != true do
+                Libremarket.Compras.AMQP.publish_venta(id, compra[:id_producto], "liberar")
+                _ = Libremarket.Compras.Server.actualizar_compra(id, %{liberado: true})
+              end
+
+            _ ->
+              :ok
+          end
+
           Logger.warning("Compras.AMQP → pago RECHAZADO para #{id}")
         end
 
@@ -471,7 +475,8 @@ defmodule Libremarket.Compras.AMQP do
               end
 
             {"reservar", true} ->
-              %{}
+              # Marcar reserva efectiva
+              %{reservado: true}
 
             {"reservar", false} ->
               case msg["motivo"] do
@@ -481,20 +486,38 @@ defmodule Libremarket.Compras.AMQP do
               end
 
             {"liberar", _} ->
-              %{reservado: false, reserva_at: nil}
+              # Estado local tras liberación
+              %{reservado: false, liberado: true}
 
             _ ->
               %{}
           end
 
         if map_size(cambios) > 0 do
-          _ = Libremarket.Compras.Server.actualizar_compra(id, cambios)
+          case Libremarket.Compras.Server.actualizar_compra(id, cambios) do
+            {estado, compra2} when is_map(compra2) ->
+              # Si llegó la confirmación de reserva pero ya tenemos error (pago/infracción),
+              # liberar ahora (si no se liberó antes) para evitar fugas de stock
+              cond do
+                op == "reservar" and ok? == true and
+                  compra2[:reservado] == true and compra2[:liberado] != true and
+                    (compra2[:pago_estado] == :rechazado or compra2[:infraccion] == true) ->
+                  Libremarket.Compras.AMQP.publish_venta(id, compra2[:id_producto], "liberar")
+                  _ = Libremarket.Compras.Server.actualizar_compra(id, %{liberado: true})
+                  :ok
+
+                true ->
+                  :ok
+              end
+
+            _ ->
+              :ok
+          end
         end
 
         {:noreply, state}
 
       true ->
-        require Logger
         Logger.warning("Compras.AMQP: mensaje desconocido #{inspect(msg)}")
         {:noreply, state}
     end

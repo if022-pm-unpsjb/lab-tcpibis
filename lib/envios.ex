@@ -18,6 +18,8 @@ defmodule Libremarket.Envio.Server do
   """
 
   use GenServer
+  require Logger
+  alias Libremarket.Replicacion
 
   @global_name {:global, __MODULE__}
 
@@ -25,7 +27,35 @@ defmodule Libremarket.Envio.Server do
   Crea un nuevo servidor de Envio
   """
   def start_link(opts \\ %{}) do
-    GenServer.start_link(__MODULE__, opts, name: @global_name)
+    container_name = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+    {:global, base_name} = @global_name
+
+    name =
+      if is_primary do
+        @global_name
+      else
+        {:global, :"#{base_name}_#{container_name}"}
+      end
+
+    IO.puts("📡nombre #{inspect(name)}")
+    {:ok, pid} = GenServer.start_link(__MODULE__, opts, name: name)
+    Libremarket.Replicacion.Registry.registrar(__MODULE__, container_name, pid)
+    {:ok, pid}
+  end
+
+  def replicas() do
+    my_pid = GenServer.whereis(local_name())
+
+    Libremarket.Replicacion.Registry.replicas(__MODULE__)
+    |> Enum.reject(&(&1 == my_pid))
+  end
+
+  defp local_name() do
+    container = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+    {:global, base_name} = @global_name
+    if is_primary, do: @global_name, else: {:global, :"#{base_name}_#{container}"}
   end
 
   def calcular_costo_envio(pid \\ @global_name, id_compra) do
@@ -54,27 +84,57 @@ defmodule Libremarket.Envio.Server do
 
   @impl true
   def handle_call({:calcular_costo_envio, id_compra}, _from, state) do
-    result = Libremarket.Envio.calcular_costo_envio()
-    new_state = Map.put(state, id_compra, result)
-    {:reply, result, new_state}
+    primario = System.get_env("PRIMARY") == "true"
+
+    if primario do
+      result = Libremarket.Envio.calcular_costo_envio()
+      new_state = Map.put(state, id_compra, result)
+      Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
+      {:reply, result, new_state}
+    else
+      Logger.warning("Nodo réplica no debe detectar calcular costo de envio directamente")
+      {:reply, :replica, state}
+    end
   end
 
   @impl true
   def handle_call({:enviar_producto, id_compra, costo}, _from, state) do
-    Libremarket.Envio.enviar_producto()
-    new_state = Map.put(state, id_compra, %{estado: :enviado, precio_envio: costo})
-    {:reply, %{estado: :enviado, precio_envio: costo}, new_state}
+    primario = System.get_env("PRIMARY") == "true"
+
+    if primario do
+      Libremarket.Envio.enviar_producto()
+      new_state = Map.put(state, id_compra, %{estado: :enviado, precio_envio: costo})
+      Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
+      {:reply, %{estado: :enviado, precio_envio: costo}, new_state}
+    else
+      Logger.warning("Nodo réplica no debe detectar enviar productos directamente")
+      {:reply, :replica, state}
+    end
   end
 
   @impl true
   def handle_call({:agendar_envio, id_compra}, _from, state) do
-    Libremarket.Envio.agendar_envio()
-    new_state = Map.put(state, id_compra, %{estado: :agendado})
-    {:reply, %{estado: :agendado}, new_state}
+    primario = System.get_env("PRIMARY") == "true"
+
+    if primario do
+      Libremarket.Envio.agendar_envio()
+      new_state = Map.put(state, id_compra, %{estado: :agendado})
+      Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
+      {:reply, %{estado: :agendado}, new_state}
+    else
+      Logger.warning("Nodo réplica no debe detectar agendar envios directamente")
+      {:reply, :replica, state}
+    end
   end
 
   def handle_call(:obtener_envios, _from, state) do
     {:reply, state, state}
+  end
+
+  @impl true
+  def handle_call({:sync_state, new_state}, _from, _old_state) do
+    Logger.info("📡 Estado sincronizado por llamada directa (#{map_size(new_state)} entradas)")
+    {:reply, :ok, new_state}
   end
 end
 

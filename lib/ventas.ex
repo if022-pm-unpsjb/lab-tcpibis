@@ -44,19 +44,53 @@ defmodule Libremarket.Ventas do
 end
 
 defmodule Libremarket.Ventas.Server do
-  @moduledoc """
-  Ventas
-  """
-
   use GenServer
+  require Logger
+  alias Libremarket.Replicacion
 
   @global_name {:global, __MODULE__}
 
-  @doc """
-  Crea un nuevo servidor de Ventas
-  """
   def start_link(opts \\ %{}) do
-    GenServer.start_link(__MODULE__, opts, name: @global_name)
+    container_name = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+    {:global, base_name} = @global_name
+
+    name =
+      if is_primary do
+        @global_name
+      else
+        {:global, :"#{base_name}_#{container_name}"}
+      end
+
+    IO.puts("📡nombre #{inspect(name)}")
+
+    {:ok, pid} = GenServer.start_link(__MODULE__, opts, name: name)
+
+    # Registrar el PID en :pg
+    Libremarket.Replicacion.Registry.registrar(__MODULE__, container_name, pid)
+
+    {:ok, pid}
+  end
+
+  # PIDs de réplicas (excluye el propio PID para evitar deadlock)
+  def replicas() do
+    my_pid = GenServer.whereis(local_name())
+
+    Libremarket.Replicacion.Registry.replicas(__MODULE__)
+    |> Enum.reject(&(&1 == my_pid))
+  end
+
+  # Nombre local (global o con sufijo de contenedor)
+  defp local_name() do
+    container = System.get_env("CONTAINER_NAME") || "default"
+    is_primary = System.get_env("PRIMARY") == "true"
+    {:global, base_name} = @global_name
+
+    if is_primary do
+      @global_name
+    else
+      {:global, :"#{base_name}_#{container}"}
+    end
   end
 
   def productos_disponibles(pid \\ @global_name) do
@@ -75,18 +109,16 @@ defmodule Libremarket.Ventas.Server do
     GenServer.call(pid, {:seleccionar_producto, id_producto})
   end
 
-  @doc """
-  Inicializa el estado del servidor
-  """
+  def obtener_productos() do
+    GenServer.call(@global_name, :obtener_productos)
+  end
+
   @impl true
   def init(_state) do
     productos = Libremarket.Ventas.productos_disponibles()
     {:ok, productos}
   end
 
-  @doc """
-  Callbacks
-  """
   @impl true
   def handle_call(:productos_disponibles, _from, state) do
     result = Libremarket.Ventas.productos_disponibles()
@@ -95,23 +127,37 @@ defmodule Libremarket.Ventas.Server do
 
   @impl true
   def handle_call({:liberar_reserva, id_producto}, _from, state) do
-    case Libremarket.Ventas.liberar_reserva(id_producto, state) do
-      {:ok, new_state} ->
-        {:reply, {:ok, new_state}, new_state}
+    primario = System.get_env("PRIMARY") == "true"
 
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
+    if primario do
+      case Libremarket.Ventas.liberar_reserva(id_producto, state) do
+        {:ok, new_state} ->
+          Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
+          {:reply, {:ok, new_state}, new_state}
+
+        {:error, reason} ->
+          {:reply, {:error, reason}, state}
+      end
+    else
+      {:reply, {:error, :solo_primario}, state}
     end
   end
 
   @impl true
   def handle_call({:reservar_producto, id}, _from, state) do
-    case Libremarket.Ventas.reservar_producto(id, state) do
-      {:ok, new_state} ->
-        {:reply, {:ok, new_state}, new_state}
+    primario = System.get_env("PRIMARY") == "true"
 
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
+    if primario do
+      case Libremarket.Ventas.reservar_producto(id, state) do
+        {:ok, new_state} ->
+          Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
+          {:reply, {:ok, new_state}, new_state}
+
+        {:error, reason} ->
+          {:reply, {:error, reason}, state}
+      end
+    else
+      {:reply, {:error, :solo_primario}, state}
     end
   end
 
@@ -127,6 +173,16 @@ defmodule Libremarket.Ventas.Server do
       {:error, :sin_stock, producto} ->
         {:reply, {:error, :sin_stock, producto}, state}
     end
+  end
+
+  def handle_call(:obtener_productos, _from, state) do
+    {:reply, state, state}
+  end
+
+  @impl true
+  def handle_call({:sync_state, new_state}, _from, _old_state) do
+    Logger.info("📡 Estado sincronizado por llamada directa (#{map_size(new_state)} entradas)")
+    {:reply, :ok, new_state}
   end
 end
 
