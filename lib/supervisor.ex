@@ -16,7 +16,7 @@ defmodule Libremarket.Supervisor do
         config: [
           port: 45892,
           if_addr: "0.0.0.0",
-          multicast_addr: "255.255.255.255",
+          multicast_addr: "172.19.255.255",
           broadcast_only: true,
           secret: "secret"
         ]
