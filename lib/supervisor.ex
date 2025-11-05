@@ -16,7 +16,7 @@ defmodule Libremarket.Supervisor do
         config: [
           port: 45892,
           if_addr: "0.0.0.0",
-          multicast_addr: "127.0.0.1",
+          multicast_addr: "255.255.255.255",
           broadcast_only: true,
           secret: "secret"
         ]
@@ -25,8 +25,23 @@ defmodule Libremarket.Supervisor do
 
     server_to_run =
       case System.get_env("SERVER_TO_RUN") do
-        nil -> []
-        server_to_run -> [{String.to_existing_atom(server_to_run), %{}}]
+        nil ->
+          []
+
+        server_to_run ->
+          server_atom = String.to_existing_atom(server_to_run)
+
+          # ⚡ Si es Infracciones, levantamos primero el Leader y luego el Server
+          if String.ends_with?(server_to_run, "Infracciones.Server") do
+            [
+              {Libremarket.Infracciones.Leader, %{}},
+              {server_atom, %{}}
+            ]
+          else
+            [
+              {server_atom, %{}}
+            ]
+          end
       end
 
     amqp_to_run =
