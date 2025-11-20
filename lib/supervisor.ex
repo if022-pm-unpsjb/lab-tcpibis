@@ -47,7 +47,7 @@ defmodule Libremarket.Supervisor do
     amqp_to_run =
       if System.get_env("PRIMARY") == "true" do
         case System.get_env("AMQP_TO_RUN") do
-          nil -> []
+          nil -> []++++++
           amqp_to_run -> [{String.to_existing_atom(amqp_to_run), %{}}]
         end
       else
