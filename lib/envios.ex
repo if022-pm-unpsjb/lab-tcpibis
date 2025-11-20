@@ -28,7 +28,16 @@ defmodule Libremarket.Envio.Server do
   """
   def start_link(opts \\ %{}) do
     container_name = System.get_env("CONTAINER_NAME") || "default"
-    is_primary = System.get_env("PRIMARY") == "true"
+
+    # 🔧 Espera activa hasta que el Leader esté registrado
+    wait_for_leader()
+
+    is_primary =
+      case safe_leader_check() do
+        {:ok, result} -> result
+        _ -> false
+      end
+
     {:global, base_name} = @global_name
 
     name =
@@ -44,6 +53,24 @@ defmodule Libremarket.Envio.Server do
     {:ok, pid}
   end
 
+  defp wait_for_leader() do
+    if Process.whereis(Libremarket.Envio.Leader) == nil do
+      IO.puts("⏳ Esperando a que arranque Libremarket.Envio.Leader...")
+      :timer.sleep(500)
+      wait_for_leader()
+    else
+      :ok
+    end
+  end
+
+  defp safe_leader_check() do
+    try do
+      {:ok, Libremarket.Envio.Leader.leader?()}
+    catch
+      :exit, _ -> {:error, :not_alive}
+    end
+  end
+
   def replicas() do
     my_pid = GenServer.whereis(local_name())
 
@@ -53,7 +80,7 @@ defmodule Libremarket.Envio.Server do
 
   defp local_name() do
     container = System.get_env("CONTAINER_NAME") || "default"
-    is_primary = System.get_env("PRIMARY") == "true"
+    is_primary = Libremarket.Envio.Leader.leader?()
     {:global, base_name} = @global_name
     if is_primary, do: @global_name, else: {:global, :"#{base_name}_#{container}"}
   end
@@ -78,15 +105,22 @@ defmodule Libremarket.Envio.Server do
   Inicializa el estado del servidor
   """
   @impl true
-  def init(state) do
-    {:ok, state}
+  def init(_state) do
+    is_leader = Libremarket.Envio.Leader.leader?()
+
+    if is_leader do
+      Supervisor.start_child(
+        Libremarket.Supervisor,
+        {Libremarket.Envio.AMQP, %{}}
+      )
+    end
+
+    {:ok, %{}}
   end
 
   @impl true
   def handle_call({:calcular_costo_envio, id_compra}, _from, state) do
-    primario = System.get_env("PRIMARY") == "true"
-
-    if primario do
+    if Libremarket.Envio.Leader.leader?() do
       result = Libremarket.Envio.calcular_costo_envio()
       new_state = Map.put(state, id_compra, result)
       Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
@@ -99,9 +133,7 @@ defmodule Libremarket.Envio.Server do
 
   @impl true
   def handle_call({:enviar_producto, id_compra, costo}, _from, state) do
-    primario = System.get_env("PRIMARY") == "true"
-
-    if primario do
+    if Libremarket.Envio.Leader.leader?() do
       Libremarket.Envio.enviar_producto()
       new_state = Map.put(state, id_compra, %{estado: :enviado, precio_envio: costo})
       Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
@@ -114,9 +146,7 @@ defmodule Libremarket.Envio.Server do
 
   @impl true
   def handle_call({:agendar_envio, id_compra}, _from, state) do
-    primario = System.get_env("PRIMARY") == "true"
-
-    if primario do
+    if Libremarket.Envio.Leader.leader?() do
       Libremarket.Envio.agendar_envio()
       new_state = Map.put(state, id_compra, %{estado: :agendado})
       Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
@@ -216,5 +246,70 @@ defmodule Libremarket.Envio.AMQP do
     Channel.close(chan)
     Connection.close(conn)
     :ok
+  end
+end
+
+defmodule Libremarket.Envio.Leader do
+  use GenServer
+
+  @base_path "/libremarket/envio"
+  @leader_path "/libremarket/envio/leader"
+
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+  def leader? do
+    GenServer.call(__MODULE__, :leader?)
+  end
+
+  @impl true
+  def init(_opts) do
+    {:ok, zk} = Libremarket.ZK.connect()
+
+    # aseguramos la jerarquía usando la versión “simple”
+    wait_for_zk(zk, @base_path)
+    wait_for_zk(zk, @leader_path)
+
+    # creamos el znode efímero secuencial
+    {:ok, my_znode} =
+      :erlzk.create(
+        zk,
+        @leader_path <> "/nodo-",
+        :ephemeral_sequential
+      )
+
+    leader? = compute_leader?(zk, my_znode)
+    IO.puts("🟣 Envios: soy líder? #{leader?} (#{my_znode})")
+
+    {:ok, %{zk: zk, my_znode: my_znode, leader?: leader?}}
+  end
+
+  defp wait_for_zk(zk, path, retries \\ 5)
+  defp wait_for_zk(_zk, path, 0), do: raise("ZooKeeper no respondió creando #{path}")
+
+  defp wait_for_zk(zk, path, retries) do
+    case Libremarket.ZK.ensure_path(zk, path) do
+      :ok ->
+        :ok
+
+      {:error, _} ->
+        IO.puts("⚠️ reintentando crear #{path}…")
+        :timer.sleep(1_000)
+        wait_for_zk(zk, path, retries - 1)
+    end
+  end
+
+  @impl true
+  def handle_call(:leader?, _from, state) do
+    {:reply, state.leader?, state}
+  end
+
+  defp compute_leader?(zk, my_znode) do
+    {:ok, children} = :erlzk.get_children(zk, @leader_path)
+    sorted = children |> Enum.map(&List.to_string/1) |> Enum.sort()
+    my_name = Path.basename(List.to_string(my_znode))
+    [first | _] = sorted
+    my_name == first
   end
 end

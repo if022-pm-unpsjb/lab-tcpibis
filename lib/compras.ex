@@ -48,7 +48,7 @@ defmodule Libremarket.Compras.Server do
 
   def start_link(_opts \\ %{}) do
     container_name = System.get_env("CONTAINER_NAME") || "default"
-    is_primary = System.get_env("PRIMARY") == "true"
+    is_primary = Libremarket.Compras.Leader.leader?()
 
     {:global, base_name} = @global_name
 
@@ -79,7 +79,7 @@ defmodule Libremarket.Compras.Server do
   # Nombre local (global o con sufijo de contenedor)
   defp local_name() do
     container = System.get_env("CONTAINER_NAME") || "default"
-    is_primary = System.get_env("PRIMARY") == "true"
+    is_primary = Libremarket.Compras.Leader.leader?()
     {:global, base_name} = @global_name
 
     if is_primary do
@@ -112,7 +112,16 @@ defmodule Libremarket.Compras.Server do
   end
 
   @impl true
+  @impl true
   def init(_state) do
+    # Si este nodo es el líder, inicia el AMQP
+    if Libremarket.Compras.Leader.leader?() do
+      Supervisor.start_child(
+        Libremarket.Supervisor,
+        {Libremarket.Compras.AMQP, %{}}
+      )
+    end
+
     {:ok, %{next_id: 0, compras: %{}}}
   end
 
@@ -122,9 +131,7 @@ defmodule Libremarket.Compras.Server do
         _from,
         %{next_id: id, compras: compras} = st
       ) do
-    primario = System.get_env("PRIMARY") == "true"
-
-    if primario do
+    if Libremarket.Compras.Leader.leader?() do
       compra_id = id + 1
 
       result = Libremarket.Compras.comprar(id_producto, forma_envio, forma_pago)
@@ -184,7 +191,7 @@ defmodule Libremarket.Compras.Server do
 
         new_state = %{st | compras: nuevo_compras}
         # 🔁 si es primario, replicar
-        if System.get_env("PRIMARY") == "true" do
+        if Libremarket.Compras.Leader.leader?() do
           Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
 
@@ -231,7 +238,7 @@ defmodule Libremarket.Compras.Server do
 
         new_state = %{st | compras: new_compras}
 
-        if System.get_env("PRIMARY") == "true" do
+        if Libremarket.Compras.Leader.leader?() do
           Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
 
@@ -250,7 +257,7 @@ defmodule Libremarket.Compras.Server do
 
         new_state = %{st | compras: Map.put(compras, id_compra, {:ok, compra2})}
 
-        if System.get_env("PRIMARY") == "true" do
+        if Libremarket.Compras.Leader.leader?() do
           Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
 
@@ -269,7 +276,7 @@ defmodule Libremarket.Compras.Server do
 
         new_state = %{st | compras: Map.put(compras, id_compra, {:error, compra2})}
 
-        if System.get_env("PRIMARY") == "true" do
+        if Libremarket.Compras.Leader.leader?() do
           Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
 
@@ -288,6 +295,86 @@ defmodule Libremarket.Compras.Server do
 
   def procesar_infraccion(pid \\ @global_name, id_compra, infraccion?) do
     GenServer.call(pid, {:procesar_infraccion, id_compra, infraccion?})
+  end
+end
+
+defmodule Libremarket.Compras.Leader do
+  @moduledoc """
+  Maneja la elección de líder para el servicio Compras usando ZooKeeper.
+  """
+
+  use GenServer
+
+  @base_path "/libremarket/compras"
+  @leader_path "/libremarket/compras/leader"
+
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+  @doc "Indica si este nodo es el líder."
+  def leader? do
+    GenServer.call(__MODULE__, :leader?)
+  end
+
+  @impl true
+  def init(_opts) do
+    {:ok, zk} = Libremarket.ZK.connect()
+
+    # Aseguramos estructura en ZooKeeper (con reintentos seguros)
+    wait_for_zk(zk, @base_path)
+    wait_for_zk(zk, @leader_path)
+
+    # Creamos znode efímero secuencial como candidato a líder
+    {:ok, my_znode} =
+      :erlzk.create(
+        zk,
+        @leader_path <> "/nodo-",
+        :ephemeral_sequential
+      )
+
+    leader? = compute_leader?(zk, my_znode)
+
+    IO.puts("🟢 Compras.Leader → soy líder? #{leader?} (#{my_znode})")
+
+    {:ok, %{zk: zk, my_znode: my_znode, leader?: leader?}}
+  end
+
+  @impl true
+  def handle_call(:leader?, _from, state) do
+    {:reply, state.leader?, state}
+  end
+
+  # Garantiza que se puede crear la jerarquía en ZK
+  defp wait_for_zk(zk, path, retries \\ 5)
+  defp wait_for_zk(_zk, path, 0), do: raise("ZooKeeper no respondió creando #{path}")
+
+  defp wait_for_zk(zk, path, retries) do
+    case Libremarket.ZK.ensure_path(zk, path) do
+      :ok ->
+        :ok
+
+      {:error, _} ->
+        IO.puts("⚠️  Compras.Leader: reintentando crear #{path}…")
+        :timer.sleep(1_000)
+        wait_for_zk(zk, path, retries - 1)
+    end
+  end
+
+  # Determina si este nodo es el líder comparando nombres lexicográficamente
+  defp compute_leader?(zk, my_znode) do
+    {:ok, children} = :erlzk.get_children(zk, @leader_path)
+
+    sorted =
+      children
+      |> Enum.map(&List.to_string/1)
+      |> Enum.sort()
+
+    my_name = Path.basename(List.to_string(my_znode))
+
+    [first | _] = sorted
+
+    my_name == first
   end
 end
 

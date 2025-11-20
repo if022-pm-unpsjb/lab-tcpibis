@@ -100,7 +100,7 @@ defmodule Libremarket.Infracciones.Server do
     if is_leader do
       Supervisor.start_child(
         Libremarket.Supervisor,
-        {Libremarket.Infracciones.Leader, %{}}
+        {Libremarket.Infracciones.AMQP, %{}}
       )
     end
 

@@ -36,7 +36,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
       CONTAINER_NAME: infracciones_1
       ZK_HOST: "zookeeper:2181"
     command: >
@@ -63,7 +63,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
       CONTAINER_NAME: infracciones_2
       ZK_HOST: "zookeeper:2181"
     command: >
@@ -89,7 +89,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
       CONTAINER_NAME: infracciones_3
       ZK_HOST: "zookeeper:2181"
     command: >
@@ -115,7 +115,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Envio.Leader
       CONTAINER_NAME: envios_1
     command: >
       elixir --sname envios_1 --cookie ${SECRET}
@@ -137,7 +137,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Envio.Leader
       CONTAINER_NAME: envios_2
     command: >
       elixir --sname envios_2 --cookie ${SECRET}
@@ -159,7 +159,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Envio.Leader
       CONTAINER_NAME: envios_3
     command: >
       elixir --sname envios_3 --cookie ${SECRET}
@@ -181,7 +181,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Compras.Leader
       CONTAINER_NAME: compras_1
     command: >
       elixir --sname compras_1 --cookie ${SECRET}
@@ -203,7 +203,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Compras.Leader
       CONTAINER_NAME: compras_2
     command: >
       elixir --sname compras_2 --cookie ${SECRET}
@@ -225,7 +225,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Compras.Leader
       CONTAINER_NAME: compras_3
     command: >
       elixir --sname compras_3 --cookie ${SECRET}
@@ -247,7 +247,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Pagos.Leader
       CONTAINER_NAME: pagos_1
     command: >
       elixir --sname pagos_1 --cookie ${SECRET}
@@ -269,7 +269,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Pagos.Leader
       CONTAINER_NAME: pagos_2
     command: >
       elixir --sname pagos_2 --cookie ${SECRET}
@@ -291,7 +291,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Pagos.Leader
       CONTAINER_NAME: pagos_3
     command: >
       elixir --sname pagos_3 --cookie ${SECRET}
@@ -313,7 +313,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Ventas.Leader
       CONTAINER_NAME: ventas_1
     command: >
       elixir --sname ventas_1 --cookie ${SECRET}
@@ -335,7 +335,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Ventas.Leader
       CONTAINER_NAME: ventas_2
     command: >
       elixir --sname ventas_2 --cookie ${SECRET}
@@ -357,7 +357,7 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
+      LEADER_TO_RUN:  Elixir.Libremarket.Ventas.Leader
       CONTAINER_NAME: ventas_3
     command: >
       elixir --sname ventas_3 --cookie ${SECRET}
