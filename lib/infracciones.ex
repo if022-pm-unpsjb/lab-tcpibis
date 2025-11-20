@@ -95,6 +95,15 @@ defmodule Libremarket.Infracciones.Server do
   """
   @impl true
   def init(_state) do
+    is_leader = Libremarket.Infracciones.Leader.leader?()
+
+    if is_leader do
+      Supervisor.start_child(
+        Libremarket.Supervisor,
+        {Libremarket.Infracciones.Leader, %{}}
+      )
+    end
+
     {:ok, %{}}
   end
 

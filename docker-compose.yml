@@ -23,9 +23,9 @@ services:
       timeout: 5s
       retries: 10
 
-  infracciones_principal:
+  infracciones_1:
     image: elixir:1.15.7-alpine
-    container_name: infracciones_principal
+    container_name: infracciones_1
     networks:
       - libremarket
     volumes:
@@ -37,11 +37,10 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
-      PRIMARY: true
-      CONTAINER_NAME: infracciones_principal
+      CONTAINER_NAME: infracciones_1
       ZK_HOST: "zookeeper:2181"
     command: >
-      elixir --sname infracciones_principal --cookie ${SECRET}
+      elixir --sname infracciones_1 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
@@ -51,9 +50,9 @@ services:
         condition: service_healthy
 
 
-  infracciones_replica_1:
+  infracciones_2:
     image: elixir:1.15.7-alpine
-    container_name: infracciones_replica_1
+    container_name: infracciones_2
     networks:
       - libremarket
     volumes:
@@ -65,11 +64,10 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: infracciones_replica_1
+      CONTAINER_NAME: infracciones_2
       ZK_HOST: "zookeeper:2181"
     command: >
-      elixir --sname infracciones_replica_1 --cookie ${SECRET}
+      elixir --sname infracciones_2 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
@@ -78,9 +76,9 @@ services:
       zookeeper:
         condition: service_healthy
 
-  infracciones_replica_2:
+  infracciones_3:
     image: elixir:1.15.7-alpine
-    container_name: infracciones_replica_2
+    container_name: infracciones_3
     networks:
       - libremarket
     volumes:
@@ -92,11 +90,10 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: infracciones_replica_2
+      CONTAINER_NAME: infracciones_3
       ZK_HOST: "zookeeper:2181"
     command: >
-      elixir --sname infracciones_replica_2 --cookie ${SECRET}
+      elixir --sname infracciones_3 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
@@ -105,9 +102,9 @@ services:
       zookeeper:
         condition: service_healthy
 
-  envios_principal:
+  envios_1:
     image: elixir:1.15.7-alpine
-    container_name: envios_principal
+    container_name: envios_1
     networks:
       - libremarket
     volumes:
@@ -119,18 +116,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
       AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
-      PRIMARY: true
-      CONTAINER_NAME: envios_principal
+      CONTAINER_NAME: envios_1
     command: >
-      elixir --sname envios_principal --cookie ${SECRET}
+      elixir --sname envios_1 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  envios_replica_1:
+  envios_2:
     image: elixir:1.15.7-alpine
-    container_name: envios_replica_1
+    container_name: envios_2
     networks:
       - libremarket
     volumes:
@@ -142,18 +138,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
       AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: envios_replica_1
+      CONTAINER_NAME: envios_2
     command: >
-      elixir --sname envios_replica_1 --cookie ${SECRET}
+      elixir --sname envios_2 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  envios_replica_2:
+  envios_3:
     image: elixir:1.15.7-alpine
-    container_name: envios_replica_2
+    container_name: envios_3
     networks:
       - libremarket
     volumes:
@@ -165,18 +160,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
       AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: envios_replica_2
+      CONTAINER_NAME: envios_3
     command: >
-      elixir --sname envios_replica_2 --cookie ${SECRET}
+      elixir --sname envios_3 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  compras_principal:
+  compras_1:
     image: elixir:1.15.7-alpine
-    container_name: compras_principal
+    container_name: compras_1
     networks:
       - libremarket
     volumes:
@@ -188,18 +182,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
       AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
-      PRIMARY: true
-      CONTAINER_NAME: compras_principal
+      CONTAINER_NAME: compras_1
     command: >
-      elixir --sname compras_principal --cookie ${SECRET}
+      elixir --sname compras_1 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  compras_replica_1:
+  compras_2:
     image: elixir:1.15.7-alpine
-    container_name: compras_replica_1
+    container_name: compras_2
     networks:
       - libremarket
     volumes:
@@ -211,18 +204,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
       AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: compras_replica_1
+      CONTAINER_NAME: compras_2
     command: >
-      elixir --sname compras_replica_1 --cookie ${SECRET}
+      elixir --sname compras_2 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  compras_replica_2:
+  compras_3:
     image: elixir:1.15.7-alpine
-    container_name: compras_replica_2
+    container_name: compras_3
     networks:
       - libremarket
     volumes:
@@ -234,18 +226,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
       AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: compras_replica_2
+      CONTAINER_NAME: compras_3
     command: >
-      elixir --sname compras_replica_2 --cookie ${SECRET}
+      elixir --sname compras_3 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  pagos_principal:
+  pagos_1:
     image: elixir:1.15.7-alpine
-    container_name: pagos_principal
+    container_name: pagos_1
     networks:
       - libremarket
     volumes:
@@ -257,18 +248,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
       AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
-      PRIMARY: true
-      CONTAINER_NAME: pagos_principal
+      CONTAINER_NAME: pagos_1
     command: >
-      elixir --sname pagos_principal --cookie ${SECRET}
+      elixir --sname pagos_1 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  pagos_replica_1:
+  pagos_2:
     image: elixir:1.15.7-alpine
-    container_name: pagos_replica_1
+    container_name: pagos_2
     networks:
       - libremarket
     volumes:
@@ -280,18 +270,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
       AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: pagos_replica_1
+      CONTAINER_NAME: pagos_2
     command: >
-      elixir --sname pagos_replica_1 --cookie ${SECRET}
+      elixir --sname pagos_2 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  pagos_replica_2:
+  pagos_3:
     image: elixir:1.15.7-alpine
-    container_name: pagos_replica_2
+    container_name: pagos_3
     networks:
       - libremarket
     volumes:
@@ -303,18 +292,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
       AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: pagos_replica_2
+      CONTAINER_NAME: pagos_3
     command: >
-      elixir --sname pagos_replica_2 --cookie ${SECRET}
+      elixir --sname pagos_3 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  ventas_principal:
+  ventas_1:
     image: elixir:1.15.7-alpine
-    container_name: ventas_principal
+    container_name: ventas_1
     networks:
       - libremarket
     volumes:
@@ -326,18 +314,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
       AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
-      PRIMARY: true
-      CONTAINER_NAME: ventas_principal
+      CONTAINER_NAME: ventas_1
     command: >
-      elixir --sname ventas_principal --cookie ${SECRET}
+      elixir --sname ventas_1 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  ventas_replica_1:
+  ventas_2:
     image: elixir:1.15.7-alpine
-    container_name: ventas_replica_1
+    container_name: ventas_2
     networks:
       - libremarket
     volumes:
@@ -349,18 +336,17 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
       AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: ventas_replica_1
+      CONTAINER_NAME: ventas_2
     command: >
-      elixir --sname ventas_replica_1 --cookie ${SECRET}
+      elixir --sname ventas_2 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  ventas_replica_2:
+  ventas_3:
     image: elixir:1.15.7-alpine
-    container_name: ventas_replica_2
+    container_name: ventas_3
     networks:
       - libremarket
     volumes:
@@ -372,10 +358,9 @@ services:
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
       AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
-      PRIMARY: false
-      CONTAINER_NAME: ventas_replica_2
+      CONTAINER_NAME: ventas_3
     command: >
-      elixir --sname ventas_replica_2 --cookie ${SECRET}
+      elixir --sname ventas_3 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
