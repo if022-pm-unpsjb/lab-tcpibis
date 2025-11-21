@@ -95,16 +95,19 @@ defmodule Libremarket.Infracciones.Server do
   """
   @impl true
   def init(_state) do
-    is_leader = Libremarket.Infracciones.Leader.leader?()
+    {:ok, %{}, {:continue, :start_amqp_if_leader}}
+  end
 
-    if is_leader do
+  @impl true
+  def handle_continue(:start_amqp_if_leader, state) do
+    if Libremarket.Infracciones.Leader.leader?() do
       Supervisor.start_child(
         Libremarket.Supervisor,
         {Libremarket.Infracciones.AMQP, %{}}
       )
     end
 
-    {:ok, %{}}
+    {:noreply, state}
   end
 
   @doc """

@@ -81,7 +81,19 @@ defmodule Libremarket.Pagos.Server do
 
   @impl true
   def init(_opts) do
-    {:ok, %{}}
+    {:ok, %{}, {:continue, :start_amqp_if_leader}}
+  end
+
+  @impl true
+  def handle_continue(:start_amqp_if_leader, state) do
+    if Libremarket.Pagos.Leader.leader?() do
+      Supervisor.start_child(
+        Libremarket.Supervisor,
+        {Libremarket.Pagos.AMQP, %{}}
+      )
+    end
+
+    {:noreply, state}
   end
 
   def handle_call({:autorizar_pago, id_compra}, _from, state) do

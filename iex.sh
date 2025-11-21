@@ -3,4 +3,4 @@
 # Make sure to specify the user with "-u $(id -u):$(id -g)"
 # so that the created files have proper permissions
 
-docker run -it --rm -v "$(pwd)":/app -w /app -u $(id -u):$(id -g) --network libremarket -e MIX_HOME=/app/mix_home -e HEX_HOME=/app/hex_home elixir:1.15.7-alpine iex --sname $1 --cookie $2 -S mix
+docker run -it --rm -v "$(pwd)":/app -w /app -u $(id -u):$(id -g) --network host -e MIX_HOME=/app/mix_home -e HEX_HOME=/app/hex_home elixir:1.15.7-alpine iex --sname $1 --cookie $2 -S mix

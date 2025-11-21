@@ -133,18 +133,20 @@ defmodule Libremarket.Ventas.Server do
 
   @impl true
   def init(_state) do
-    is_leader = Libremarket.Ventas.Leader.leader?()
+    productos = Libremarket.Ventas.productos_disponibles()
+    {:ok, productos, {:continue, :start_amqp_if_leader}}
+  end
 
-    # Solo el líder levanta el AMQP
-    if is_leader do
+  @impl true
+  def handle_continue(:start_amqp_if_leader, productos) do
+    if Libremarket.Ventas.Leader.leader?() do
       Supervisor.start_child(
         Libremarket.Supervisor,
         {Libremarket.Ventas.AMQP, %{}}
       )
     end
 
-    productos = Libremarket.Ventas.productos_disponibles()
-    {:ok, productos}
+    {:noreply, productos}
   end
 
   @impl true

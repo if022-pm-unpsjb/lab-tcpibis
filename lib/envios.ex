@@ -106,16 +106,19 @@ defmodule Libremarket.Envio.Server do
   """
   @impl true
   def init(_state) do
-    is_leader = Libremarket.Envio.Leader.leader?()
+    {:ok, %{}, {:continue, :start_amqp_if_leader}}
+  end
 
-    if is_leader do
+  @impl true
+  def handle_continue(:start_amqp_if_leader, state) do
+    if Libremarket.Envio.Leader.leader?() do
       Supervisor.start_child(
         Libremarket.Supervisor,
         {Libremarket.Envio.AMQP, %{}}
       )
     end
 
-    {:ok, %{}}
+    {:noreply, state}
   end
 
   @impl true

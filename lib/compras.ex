@@ -46,9 +46,17 @@ defmodule Libremarket.Compras.Server do
 
   @global_name {:global, __MODULE__}
 
-  def start_link(_opts \\ %{}) do
+  def start_link(opts \\ %{}) do
     container_name = System.get_env("CONTAINER_NAME") || "default"
-    is_primary = Libremarket.Compras.Leader.leader?()
+
+    # 🔧 Espera activa hasta que el Leader esté registrado
+    wait_for_leader()
+
+    is_primary =
+      case safe_leader_check() do
+        {:ok, result} -> result
+        _ -> false
+      end
 
     {:global, base_name} = @global_name
 
@@ -60,12 +68,27 @@ defmodule Libremarket.Compras.Server do
       end
 
     IO.puts("📡nombre #{inspect(name)}")
-
-    {:ok, pid} = GenServer.start_link(__MODULE__, %{}, name: name)
-
+    {:ok, pid} = GenServer.start_link(__MODULE__, opts, name: name)
     Libremarket.Replicacion.Registry.registrar(__MODULE__, container_name, pid)
-
     {:ok, pid}
+  end
+
+  defp wait_for_leader() do
+    if Process.whereis(Libremarket.Compras.Leader) == nil do
+      IO.puts("⏳ Esperando a que arranque Libremarket.Infracciones.Leader...")
+      :timer.sleep(500)
+      wait_for_leader()
+    else
+      :ok
+    end
+  end
+
+  defp safe_leader_check() do
+    try do
+      {:ok, Libremarket.Compras.Leader.leader?()}
+    catch
+      :exit, _ -> {:error, :not_alive}
+    end
   end
 
   # PIDs de réplicas (excluye el propio PID para evitar deadlock)
@@ -112,9 +135,12 @@ defmodule Libremarket.Compras.Server do
   end
 
   @impl true
-  @impl true
   def init(_state) do
-    # Si este nodo es el líder, inicia el AMQP
+    {:ok, %{next_id: 0, compras: %{}}, {:continue, :start_amqp}}
+  end
+
+  @impl true
+  def handle_continue(:start_amqp, state) do
     if Libremarket.Compras.Leader.leader?() do
       Supervisor.start_child(
         Libremarket.Supervisor,
@@ -122,7 +148,7 @@ defmodule Libremarket.Compras.Server do
       )
     end
 
-    {:ok, %{next_id: 0, compras: %{}}}
+    {:noreply, state}
   end
 
   @impl true
