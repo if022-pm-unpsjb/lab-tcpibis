@@ -16,29 +16,46 @@ defmodule Libremarket.Supervisor do
         config: [
           port: 45892,
           if_addr: "0.0.0.0",
-          multicast_addr: "127.0.0.1",
+          multicast_addr: "172.19.255.255",
           broadcast_only: true,
           secret: "secret"
         ]
       ]
     ]
 
-    server_to_run =
-      case System.get_env("SERVER_TO_RUN") do
-        nil -> []
-        server_to_run -> [{String.to_existing_atom(server_to_run), %{}}]
+    leader_to_run = System.get_env("LEADER_TO_RUN")
+    server_to_run = System.get_env("SERVER_TO_RUN")
+
+    # Construir la lista de procesos a levantar
+    processes_to_run = []
+
+    # Agregar el Leader si existe
+    processes_to_run =
+      case leader_to_run do
+        nil ->
+          processes_to_run
+
+        leader ->
+          leader_atom = String.to_existing_atom(leader)
+          processes_to_run ++ [{leader_atom, %{}}]
       end
 
-    amqp_to_run =
-      case System.get_env("AMQP_TO_RUN") do
-        nil -> []
-        amqp_to_run -> [{String.to_existing_atom(amqp_to_run), %{}}]
+    # Agregar el Server si existe
+    processes_to_run =
+      case server_to_run do
+        nil ->
+          processes_to_run
+
+        server ->
+          server_atom = String.to_existing_atom(server)
+          processes_to_run ++ [{server_atom, %{}}]
       end
 
     childrens =
       [
+        {Libremarket.Replicacion.Registry, []},
         {Cluster.Supervisor, [topologies, [name: Libremarket.ClusterSupervisor]]}
-      ] ++ server_to_run ++ amqp_to_run
+      ] ++ processes_to_run
 
     Supervisor.init(childrens, strategy: :one_for_one)
   end

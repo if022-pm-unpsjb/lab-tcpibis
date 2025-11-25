@@ -1,9 +1,33 @@
+version: "3.9"
+
+networks:
+  libremarket:
+    name: libremarket
+    driver: bridge
 services:
 
-  infracciones:
+  zookeeper:
+    image: zookeeper:3.9
+    container_name: zookeeper
+    restart: unless-stopped
+    networks:
+      - libremarket
+    environment:
+      ZOO_STANDALONE_ENABLED: "true"
+      ZOO_4LW_COMMANDS_WHITELIST: "srvr,ruok,stat"
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  infracciones_1:
     image: elixir:1.15.7-alpine
-    container_name: infracciones
-    network_mode: "host"
+    container_name: infracciones_1
+    networks:
+      - libremarket
     volumes:
       - ./:/app
     working_dir: /app
@@ -12,19 +36,77 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Infracciones.AMQP
-    command: 
-      elixir --sname infracciones --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
+      LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
+      CONTAINER_NAME: infracciones_1
+      ZK_HOST: "zookeeper:2181"
+    command: >
+      elixir --sname infracciones_1 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
 
 
-  envios:
+  infracciones_2:
     image: elixir:1.15.7-alpine
-    container_name: envios
-    network_mode: "host"
+    container_name: infracciones_2
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
+      CONTAINER_NAME: infracciones_2
+      ZK_HOST: "zookeeper:2181"
+    command: >
+      elixir --sname infracciones_2 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+
+  infracciones_3:
+    image: elixir:1.15.7-alpine
+    container_name: infracciones_3
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
+      CONTAINER_NAME: infracciones_3
+      ZK_HOST: "zookeeper:2181"
+    command: >
+      elixir --sname infracciones_3 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+
+  envios_1:
+    image: elixir:1.15.7-alpine
+    container_name: envios_1
+    networks:
+      - libremarket
     volumes:
       - ./:/app
     working_dir: /app
@@ -33,19 +115,64 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Envio.AMQP
-    command: 
-      elixir --sname envios --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
+      LEADER_TO_RUN:  Elixir.Libremarket.Envio.Leader
+      CONTAINER_NAME: envios_1
+    command: >
+      elixir --sname envios_1 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-
-  compras:
+  envios_2:
     image: elixir:1.15.7-alpine
-    container_name: compras
-    network_mode: "host"
+    container_name: envios_2
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Envio.Leader
+      CONTAINER_NAME: envios_2
+    command: >
+      elixir --sname envios_2 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  envios_3:
+    image: elixir:1.15.7-alpine
+    container_name: envios_3
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Envio.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Envio.Leader
+      CONTAINER_NAME: envios_3
+    command: >
+      elixir --sname envios_3 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  compras_1:
+    image: elixir:1.15.7-alpine
+    container_name: compras_1
+    networks:
+      - libremarket
     volumes:
       - ./:/app
     working_dir: /app
@@ -54,18 +181,64 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Compras.AMQP
-    command: 
-      elixir --sname compras --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
+      LEADER_TO_RUN:  Elixir.Libremarket.Compras.Leader
+      CONTAINER_NAME: compras_1
+    command: >
+      elixir --sname compras_1 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-  pagos:
+  compras_2:
     image: elixir:1.15.7-alpine
-    container_name: pagos
-    network_mode: "host"
+    container_name: compras_2
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Compras.Leader
+      CONTAINER_NAME: compras_2
+    command: >
+      elixir --sname compras_2 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  compras_3:
+    image: elixir:1.15.7-alpine
+    container_name: compras_3
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Compras.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Compras.Leader
+      CONTAINER_NAME: compras_3
+    command: >
+      elixir --sname compras_3 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  pagos_1:
+    image: elixir:1.15.7-alpine
+    container_name: pagos_1
+    networks:
+      - libremarket
     volumes:
       - ./:/app
     working_dir: /app
@@ -74,19 +247,64 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Pagos.AMQP
-    command: 
-      elixir --sname pagos --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
+      LEADER_TO_RUN:  Elixir.Libremarket.Pagos.Leader
+      CONTAINER_NAME: pagos_1
+    command: >
+      elixir --sname pagos_1 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
-
-  ventas:
+  pagos_2:
     image: elixir:1.15.7-alpine
-    container_name: ventas
-    network_mode: "host"
+    container_name: pagos_2
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Pagos.Leader
+      CONTAINER_NAME: pagos_2
+    command: >
+      elixir --sname pagos_2 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  pagos_3:
+    image: elixir:1.15.7-alpine
+    container_name: pagos_3
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Pagos.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Pagos.Leader
+      CONTAINER_NAME: pagos_3
+    command: >
+      elixir --sname pagos_3 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  ventas_1:
+    image: elixir:1.15.7-alpine
+    container_name: ventas_1
+    networks:
+      - libremarket
     volumes:
       - ./:/app
     working_dir: /app
@@ -95,28 +313,76 @@ services:
       HEX_HOME: /app/hex_home
       AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
       SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
-      AMQP_TO_RUN: Elixir.Libremarket.Ventas.AMQP
-    command: 
-      elixir --sname ventas --cookie ${SECRET} -S mix run --no-halt --no-compile    # para habilitar -it
-    # para habilitar -it
+      LEADER_TO_RUN:  Elixir.Libremarket.Ventas.Leader
+      CONTAINER_NAME: ventas_1
+    command: >
+      elixir --sname ventas_1 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
- 
-  rest:
+
+  ventas_2:
     image: elixir:1.15.7-alpine
-    container_name: rest
-    network_mode: "host"              # igual que los demás
+    container_name: ventas_2
+    networks:
+      - libremarket
     volumes:
       - ./:/app
     working_dir: /app
     environment:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
-      SERVER_TO_RUN: Elixir.Libremarket.Rest.Server   # 👈 arranca el server HTTP
-      REST_PORT: 4000                                  # 👈 puerto del Plug/Cowboy
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Ventas.Leader
+      CONTAINER_NAME: ventas_2
+    command: >
+      elixir --sname ventas_2 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  ventas_3:
+    image: elixir:1.15.7-alpine
+    container_name: ventas_3
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      AMQP_URL: "amqps://euurcdqx:pXErClaP-kSXdF8YZypEyZb5brqWRthx@jackal.rmq.cloudamqp.com/euurcdqx"
+      SERVER_TO_RUN: Elixir.Libremarket.Ventas.Server
+      LEADER_TO_RUN:  Elixir.Libremarket.Ventas.Leader
+      CONTAINER_NAME: ventas_3
+    command: >
+      elixir --sname ventas_3 --cookie ${SECRET}
+      -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  rest:
+    image: elixir:1.15.7-alpine
+    container_name: rest
+    networks:
+      - libremarket
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      SERVER_TO_RUN: Elixir.Libremarket.Rest.Server
+      REST_PORT: 4000
       SECRET: ${SECRET}
     command: >
       elixir --sname rest --cookie ${SECRET}
       -S mix run --no-halt --no-compile
+    stdin_open: true
+    tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
