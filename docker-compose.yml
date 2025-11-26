@@ -38,7 +38,6 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
       CONTAINER_NAME: infracciones_1
-      ZK_HOST: "zookeeper:2181"
     command: >
       elixir --sname infracciones_1 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
@@ -65,7 +64,6 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
       CONTAINER_NAME: infracciones_2
-      ZK_HOST: "zookeeper:2181"
     command: >
       elixir --sname infracciones_2 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
@@ -91,7 +89,6 @@ services:
       SERVER_TO_RUN: Elixir.Libremarket.Infracciones.Server
       LEADER_TO_RUN:  Elixir.Libremarket.Infracciones.Leader
       CONTAINER_NAME: infracciones_3
-      ZK_HOST: "zookeeper:2181"
     command: >
       elixir --sname infracciones_3 --cookie ${SECRET}
       -S mix run --no-halt --no-compile
