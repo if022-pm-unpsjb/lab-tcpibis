@@ -50,29 +50,27 @@ defmodule Libremarket.Ventas.Server do
 
   @global_name {:global, __MODULE__}
 
+  # -------------------------
+  #  START
+  # -------------------------
   def start_link(opts \\ %{}) do
     container_name = System.get_env("CONTAINER_NAME") || "default"
 
-    # 🔧 Espera activa hasta que el Leader esté registrado
+    # esperar a que arranque el Leader
     wait_for_leader()
-
-    is_primary =
-      case safe_leader_check() do
-        {:ok, result} -> result
-        _ -> false
-      end
 
     {:global, base_name} = @global_name
 
-    name =
-      if is_primary do
-        @global_name
-      else
-        {:global, :"#{base_name}_#{container_name}"}
-      end
+    # siempre un nombre global único por contenedor
+    name = {:global, :"#{base_name}_#{container_name}"}
 
-    IO.puts("📡nombre #{inspect(name)}")
+    IO.puts("📡 [VENTAS] nombre #{inspect(name)}")
+
     {:ok, pid} = GenServer.start_link(__MODULE__, opts, name: name)
+
+    # registrar nombre local simple (igual que Infracciones)
+    Process.register(pid, __MODULE__)
+
     Libremarket.Replicacion.Registry.registrar(__MODULE__, container_name, pid)
     {:ok, pid}
   end
@@ -87,15 +85,6 @@ defmodule Libremarket.Ventas.Server do
     end
   end
 
-  defp safe_leader_check() do
-    try do
-      {:ok, Libremarket.Ventas.Leader.leader?()}
-    catch
-      :exit, _ -> {:error, :not_alive}
-    end
-  end
-
-  # PIDs de réplicas (excluye el propio PID para evitar deadlock)
   def replicas() do
     my_pid = GenServer.whereis(local_name())
 
@@ -103,87 +92,87 @@ defmodule Libremarket.Ventas.Server do
     |> Enum.reject(&(&1 == my_pid))
   end
 
-  # Nombre local (global o con sufijo de contenedor)
   defp local_name() do
     container = System.get_env("CONTAINER_NAME") || "default"
-    is_primary = Libremarket.Ventas.Leader.leader?()
     {:global, base_name} = @global_name
-    if is_primary, do: @global_name, else: {:global, :"#{base_name}_#{container}"}
+    {:global, :"#{base_name}_#{container}"}
   end
 
-  def productos_disponibles(pid \\ @global_name) do
-    GenServer.call(pid, :productos_disponibles)
-  end
+  # -------------------------
+  #  API
+  # -------------------------
+  def productos_disponibles(pid \\ @global_name),
+    do: GenServer.call(pid, :productos_disponibles)
 
-  def liberar_reserva(pid \\ @global_name, id_producto) do
-    GenServer.call(pid, {:liberar_reserva, id_producto})
-  end
+  def liberar_reserva(pid \\ @global_name, id),
+    do: GenServer.call(pid, {:liberar_reserva, id})
 
-  def reservar_producto(pid \\ @global_name, id_producto) do
-    GenServer.call(pid, {:reservar_producto, id_producto})
-  end
+  def reservar_producto(pid \\ @global_name, id),
+    do: GenServer.call(pid, {:reservar_producto, id})
 
-  def seleccionar_producto(pid \\ @global_name, id_producto) do
-    GenServer.call(pid, {:seleccionar_producto, id_producto})
-  end
+  def seleccionar_producto(pid \\ @global_name, id),
+    do: GenServer.call(pid, {:seleccionar_producto, id})
 
-  def obtener_productos() do
-    GenServer.call(@global_name, :obtener_productos)
-  end
+  def obtener_productos(),
+    do: GenServer.call(@global_name, :obtener_productos)
 
+  # -------------------------
+  #  INIT
+  # -------------------------
   @impl true
-  def init(_state) do
+  def init(_opts) do
     productos = Libremarket.Ventas.productos_disponibles()
     {:ok, productos, {:continue, :start_amqp_if_leader}}
   end
 
   @impl true
-  def handle_continue(:start_amqp_if_leader, productos) do
+  def handle_continue(:start_amqp_if_leader, state) do
     if Libremarket.Ventas.Leader.leader?() do
+      register_as_leader()
+
       Supervisor.start_child(
         Libremarket.Supervisor,
         {Libremarket.Ventas.AMQP, %{}}
       )
     end
 
-    {:noreply, productos}
+    {:noreply, state}
   end
 
+  # -------------------------
+  #  LOGIC
+  # -------------------------
   @impl true
   def handle_call(:productos_disponibles, _from, state) do
-    result = Libremarket.Ventas.productos_disponibles()
-    {:reply, result, state}
+    {:reply, Libremarket.Ventas.productos_disponibles(), state}
   end
 
   @impl true
-  def handle_call({:liberar_reserva, id_producto}, _from, state) do
-    primario = Libremarket.Ventas.Leader.leader?()
+  def handle_call({:liberar_reserva, id}, _from, state) do
+    if Libremarket.Ventas.Leader.leader?() do
+      case Libremarket.Ventas.liberar_reserva(id, state) do
+        {:ok, new} ->
+          Replicacion.replicar_estado(new, replicas(), __MODULE__)
+          {:reply, {:ok, new}, new}
 
-    if primario do
-      case Libremarket.Ventas.liberar_reserva(id_producto, state) do
-        {:ok, new_state} ->
-          Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
-          {:reply, {:ok, new_state}, new_state}
-
-        {:error, reason} ->
-          {:reply, {:error, reason}, state}
+        err ->
+          {:reply, err, state}
       end
     else
       {:reply, {:error, :solo_primario}, state}
     end
   end
 
+  @impl true
   def handle_call({:reservar_producto, id}, _from, state) do
-    primario = Libremarket.Ventas.Leader.leader?()
-
-    if primario do
+    if Libremarket.Ventas.Leader.leader?() do
       case Libremarket.Ventas.reservar_producto(id, state) do
-        {:ok, new_state} ->
-          Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
-          {:reply, {:ok, new_state}, new_state}
+        {:ok, new} ->
+          Replicacion.replicar_estado(new, replicas(), __MODULE__)
+          {:reply, {:ok, new}, new}
 
-        {:error, reason} ->
-          {:reply, {:error, reason}, state}
+        err ->
+          {:reply, err, state}
       end
     else
       {:reply, {:error, :solo_primario}, state}
@@ -191,27 +180,81 @@ defmodule Libremarket.Ventas.Server do
   end
 
   @impl true
-  def handle_call({:seleccionar_producto, id_producto}, _from, state) do
-    case Libremarket.Ventas.seleccionar_producto(id_producto, state) do
-      {:ok, producto} ->
-        {:reply, {:ok, producto}, state}
-
-      {:error, :not_found} ->
-        {:reply, {:error, :not_found}, state}
-
-      {:error, :sin_stock, producto} ->
-        {:reply, {:error, :sin_stock, producto}, state}
+  def handle_call({:seleccionar_producto, id}, _from, state) do
+    case Libremarket.Ventas.seleccionar_producto(id, state) do
+      {:ok, prod} -> {:reply, {:ok, prod}, state}
+      {:error, reason, prod} -> {:reply, {:error, reason, prod}, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
-  def handle_call(:obtener_productos, _from, state) do
-    {:reply, state, state}
+  def handle_call(:obtener_productos, _from, state),
+    do: {:reply, state, state}
+
+  @impl true
+  def handle_call({:sync_state, new}, _from, _old) do
+    Logger.info("📡 [VENTAS] Estado sincronizado (#{map_size(new)} items)")
+    {:reply, :ok, new}
+  end
+
+  # -------------------------
+  #  LIDERAZGO DINÁMICO
+  # -------------------------
+  def lider_cambio(es_lider) do
+    GenServer.cast(__MODULE__, {:lider_cambio, es_lider})
   end
 
   @impl true
-  def handle_call({:sync_state, new_state}, _from, _old_state) do
-    Logger.info("📡 Estado sincronizado por llamada directa (#{map_size(new_state)} entradas)")
-    {:reply, :ok, new_state}
+  def handle_cast({:lider_cambio, true}, state) do
+    IO.puts("🟢 [VENTAS] Ahora soy líder → levantando AMQP")
+    register_as_leader()
+
+    Supervisor.start_child(
+      Libremarket.Supervisor,
+      {Libremarket.Ventas.AMQP, %{}}
+    )
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:lider_cambio, false}, state) do
+    IO.puts("🔴 [VENTAS] Perdí liderazgo → sigo como réplica")
+    unregister_as_leader()
+    {:noreply, state}
+  end
+
+  # -------------------------
+  #  GLOBAL NAMES
+  # -------------------------
+  defp register_as_leader() do
+    # si ya había otro líder → borrar
+    case :global.whereis_name(__MODULE__) do
+      pid when is_pid(pid) and pid != self() ->
+        :global.unregister_name(__MODULE__)
+
+      _ ->
+        :ok
+    end
+
+    # limpiar nombres viejos tipo Server_ventas-2
+    Enum.each(:global.registered_names(), fn name ->
+      if name != __MODULE__ and
+           String.starts_with?(to_string(name), "Elixir.Libremarket.Ventas.Server_") and
+           :global.whereis_name(name) == self() do
+        :global.unregister_name(name)
+      end
+    end)
+
+    :global.register_name(__MODULE__, self())
+  end
+
+  defp unregister_as_leader() do
+    if :global.whereis_name(__MODULE__) == self() do
+      :global.unregister_name(__MODULE__)
+    end
+
+    :ok
   end
 end
 
@@ -366,39 +409,103 @@ defmodule Libremarket.Ventas.Leader do
 
   @base_path "/libremarket/ventas"
   @leader_path "/libremarket/ventas/leader"
+  @interval 2_000
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def leader? do
-    GenServer.call(__MODULE__, :leader?)
-  end
+  def leader?(), do: GenServer.call(__MODULE__, :leader?)
 
   @impl true
   def init(_opts) do
+    # ETS global
+    case :ets.whereis(:lider_ventas) do
+      :undefined -> :ets.new(:lider_ventas, [:named_table, :public])
+      _ -> :ok
+    end
+
     {:ok, zk} = Libremarket.ZK.connect()
 
-    # aseguramos la jerarquía usando la versión “simple”
     wait_for_zk(zk, @base_path)
     wait_for_zk(zk, @leader_path)
 
-    # creamos el znode efímero secuencial
     {:ok, my_znode} =
-      :erlzk.create(
-        zk,
-        @leader_path <> "/nodo-",
-        :ephemeral_sequential
-      )
+      :erlzk.create(zk, @leader_path <> "/nodo-", :ephemeral_sequential)
 
     leader? = compute_leader?(zk, my_znode)
-    IO.puts("🟣 Ventas: soy líder? #{leader?} (#{my_znode})")
+
+    :ets.insert(:lider_ventas, {:is_leader, leader?})
+
+    IO.puts("🟣 [VENTAS] Soy líder? #{leader?} (#{my_znode})")
+
+    Process.send_after(self(), :check_leader, @interval)
 
     {:ok, %{zk: zk, my_znode: my_znode, leader?: leader?}}
   end
 
+  @impl true
+  def handle_call(:leader?, _from, st),
+    do: {:reply, st.leader?, st}
+
+  @impl true
+  def handle_info(:check_leader, %{zk: zk, my_znode: my_znode} = state) do
+    new_state =
+      case :erlzk.get_children(zk, @leader_path) do
+        {:ok, children} ->
+          sorted = children |> Enum.map(&List.to_string/1) |> Enum.sort()
+          my_name = List.to_string(my_znode) |> Path.basename()
+          new_leader = hd(sorted) == my_name
+
+          if new_leader != state.leader? do
+            IO.puts("🔄 [VENTAS] Cambio de liderazgo: #{state.leader?} -> #{new_leader}")
+            :ets.insert(:lider_ventas, {:is_leader, new_leader})
+            Libremarket.Ventas.Server.lider_cambio(new_leader)
+          end
+
+          %{state | leader?: new_leader}
+
+        {:error, _} ->
+          IO.puts("⚠️ [VENTAS] No hay znode → recreando nodo")
+
+          wait_for_zk(zk, @leader_path)
+
+          {:ok, new_znode} =
+            :erlzk.create(zk, @leader_path <> "/nodo-", :ephemeral_sequential)
+
+          new_leader = compute_leader?(zk, new_znode)
+
+          if new_leader != state.leader? do
+            IO.puts("🔄 [VENTAS] Liderazgo recreado → líder=#{new_leader}")
+            Libremarket.Ventas.Server.lider_cambio(new_leader)
+          end
+
+          %{state | my_znode: new_znode, leader?: new_leader}
+      end
+
+    Process.send_after(self(), :check_leader, @interval)
+    {:noreply, new_state}
+  end
+
+  defp compute_leader?(zk, my_znode) do
+    {:ok, children} = :erlzk.get_children(zk, @leader_path)
+
+    sorted =
+      children |> Enum.map(&List.to_string/1) |> Enum.sort()
+
+    my_name =
+      my_znode
+      |> List.to_string()
+      |> Path.basename()
+
+    hd(sorted) == my_name
+  end
+
+  # ensure_path robusto
   defp wait_for_zk(zk, path, retries \\ 5)
-  defp wait_for_zk(_zk, path, 0), do: raise("ZooKeeper no respondió creando #{path}")
+
+  defp wait_for_zk(_zk, path, 0),
+    do: raise("ZooKeeper no respondió creando #{path}")
 
   defp wait_for_zk(zk, path, retries) do
     case Libremarket.ZK.ensure_path(zk, path) do
@@ -406,22 +513,9 @@ defmodule Libremarket.Ventas.Leader do
         :ok
 
       {:error, _} ->
-        IO.puts("⚠️ reintentando crear #{path}…")
-        :timer.sleep(1_000)
+        IO.puts("⚠️ reintentando crear #{path}")
+        :timer.sleep(800)
         wait_for_zk(zk, path, retries - 1)
     end
-  end
-
-  @impl true
-  def handle_call(:leader?, _from, state) do
-    {:reply, state.leader?, state}
-  end
-
-  defp compute_leader?(zk, my_znode) do
-    {:ok, children} = :erlzk.get_children(zk, @leader_path)
-    sorted = children |> Enum.map(&List.to_string/1) |> Enum.sort()
-    my_name = Path.basename(List.to_string(my_znode))
-    [first | _] = sorted
-    my_name == first
   end
 end

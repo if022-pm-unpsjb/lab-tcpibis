@@ -15,6 +15,11 @@ services:
     environment:
       ZOO_STANDALONE_ENABLED: "true"
       ZOO_4LW_COMMANDS_WHITELIST: "srvr,ruok,stat"
+      ZOO_TICK_TIME: "2000"
+      ZOO_INIT_LIMIT: "5"
+      ZOO_SYNC_LIMIT: "2"
+      ZOO_MIN_SESSION_TIMEOUT: "4000"
+      ZOO_MAX_SESSION_TIMEOUT: "6000"
     ports:
       - "2181:2181"
     healthcheck:

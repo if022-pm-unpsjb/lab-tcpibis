@@ -44,6 +44,7 @@ defmodule Libremarket.Compras.Server do
   require Logger
   alias Libremarket.Replicacion
 
+  # Alias global del líder del cluster (igual que en Infracciones)
   @global_name {:global, __MODULE__}
 
   def start_link(opts \\ %{}) do
@@ -52,42 +53,30 @@ defmodule Libremarket.Compras.Server do
     # 🔧 Espera activa hasta que el Leader esté registrado
     wait_for_leader()
 
-    is_primary =
-      case safe_leader_check() do
-        {:ok, result} -> result
-        _ -> false
-      end
-
     {:global, base_name} = @global_name
 
-    name =
-      if is_primary do
-        @global_name
-      else
-        {:global, :"#{base_name}_#{container_name}"}
-      end
+    # 👉 SIEMPRE: nombre global por contenedor (para réplicas y líder)
+    name = {:global, :"#{base_name}_#{container_name}"}
 
     IO.puts("📡nombre #{inspect(name)}")
+
     {:ok, pid} = GenServer.start_link(__MODULE__, opts, name: name)
+
+    # 👉 nombre LOCAL para que el Leader de este nodo le hable
+    Process.register(pid, __MODULE__)
+
+    # Registrar en el registry de réplicas
     Libremarket.Replicacion.Registry.registrar(__MODULE__, container_name, pid)
     {:ok, pid}
   end
 
   defp wait_for_leader() do
     if Process.whereis(Libremarket.Compras.Leader) == nil do
-      IO.puts("⏳ Esperando a que arranque Libremarket.Infracciones.Leader...")
+      IO.puts("⏳ Esperando a que arranque Libremarket.Compras.Leader...")
       :timer.sleep(500)
       wait_for_leader()
     else
       :ok
-    end
-  end
-
-  defp safe_leader_check() do
-    try do
-      {:ok, Libremarket.Compras.Leader.leader?()}
-    catch
-      :exit, _ -> {:error, :not_alive}
     end
   end
 
@@ -99,17 +88,11 @@ defmodule Libremarket.Compras.Server do
     |> Enum.reject(&(&1 == my_pid))
   end
 
-  # Nombre local (global o con sufijo de contenedor)
+  # Nombre local (global por contenedor, sin depender de si soy líder o no)
   defp local_name() do
     container = System.get_env("CONTAINER_NAME") || "default"
-    is_primary = Libremarket.Compras.Leader.leader?()
     {:global, base_name} = @global_name
-
-    if is_primary do
-      @global_name
-    else
-      {:global, :"#{base_name}_#{container}"}
-    end
+    {:global, :"#{base_name}_#{container}"}
   end
 
   @spec comprar(pid | atom, integer, :correo | :retira, atom, non_neg_integer) ::
@@ -136,12 +119,15 @@ defmodule Libremarket.Compras.Server do
 
   @impl true
   def init(_state) do
-    {:ok, %{next_id: 0, compras: %{}}, {:continue, :start_amqp}}
+    # mismo patrón que Infracciones: continue para levantar AMQP si soy líder
+    {:ok, %{next_id: 0, compras: %{}}, {:continue, :start_amqp_if_leader}}
   end
 
   @impl true
-  def handle_continue(:start_amqp, state) do
+  def handle_continue(:start_amqp_if_leader, state) do
     if Libremarket.Compras.Leader.leader?() do
+      register_as_leader()
+
       Supervisor.start_child(
         Libremarket.Supervisor,
         {Libremarket.Compras.AMQP, %{}}
@@ -190,7 +176,6 @@ defmodule Libremarket.Compras.Server do
           :ok
       end
 
-      # Selección y reserva siempre ocurren; la liberación se decide cuando corresponda (pago/infracción)
       Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "seleccionar")
       Libremarket.Compras.AMQP.publish_venta(compra_id, id_producto, "reservar")
 
@@ -216,7 +201,7 @@ defmodule Libremarket.Compras.Server do
         nuevo_compras = Map.put(compras, id_compra, {estado_actual, compra2})
 
         new_state = %{st | compras: nuevo_compras}
-        # 🔁 si es primario, replicar
+
         if Libremarket.Compras.Leader.leader?() do
           Replicacion.replicar_estado(new_state, replicas(), __MODULE__)
         end
@@ -246,7 +231,6 @@ defmodule Libremarket.Compras.Server do
       {:en_proceso, compra} ->
         compra2 = Map.put(compra, :infraccion, infr?)
 
-        # Liberar si ya estaba reservado y aún no liberado
         compra2 =
           if infr? and compra2[:reservado] == true and compra2[:liberado] != true do
             Libremarket.Compras.AMQP.publish_venta(id_compra, compra2[:id_producto], "liberar")
@@ -319,8 +303,77 @@ defmodule Libremarket.Compras.Server do
     {:reply, :ok, new_state}
   end
 
+  # API interna para que el Leader notifique cambio de liderazgo
   def procesar_infraccion(pid \\ @global_name, id_compra, infraccion?) do
     GenServer.call(pid, {:procesar_infraccion, id_compra, infraccion?})
+  end
+
+  def lider_cambio(es_lider) do
+    # 👉 hablar SIEMPRE con el server local del nodo
+    GenServer.cast(__MODULE__, {:lider_cambio, es_lider})
+  end
+
+  @impl true
+  def handle_cast({:lider_cambio, true}, state) do
+    IO.puts("🟢 [Compras] Ahora soy líder → levantando AMQP")
+
+    register_as_leader()
+
+    Supervisor.start_child(
+      Libremarket.Supervisor,
+      {Libremarket.Compras.AMQP, %{}}
+    )
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:lider_cambio, false}, state) do
+    IO.puts("🔴 [Compras] Perdí liderazgo → sigo como réplica")
+    unregister_as_leader()
+    {:noreply, state}
+  end
+
+  # =======================
+  # Gestión de alias global
+  # =======================
+
+  defp register_as_leader() do
+    # Si existe el alias global del líder apuntando a otro proceso → borrarlo
+    case :global.whereis_name(__MODULE__) do
+      pid when is_pid(pid) and pid != self() ->
+        :global.unregister_name(__MODULE__)
+
+      _ ->
+        :ok
+    end
+
+    # Si este mismo proceso tenía un nombre global con sufijo → borrarlo
+    # Ej: :"Elixir.Libremarket.Compras.Server_compras-2"
+    Enum.each(:global.registered_names(), fn name ->
+      if name != __MODULE__ and
+           String.starts_with?(to_string(name), "Elixir.Libremarket.Compras.Server_") do
+        if :global.whereis_name(name) == self() do
+          :global.unregister_name(name)
+        end
+      end
+    end)
+
+    # Registrar alias líder
+    case :global.register_name(__MODULE__, self()) do
+      :yes -> :ok
+      {:error, :already_registered} -> :ok
+    end
+  end
+
+  defp unregister_as_leader() do
+    case :global.whereis_name(__MODULE__) do
+      pid when pid == self() ->
+        :global.unregister_name(__MODULE__)
+
+      _ ->
+        :ok
+    end
   end
 end
 
@@ -333,6 +386,7 @@ defmodule Libremarket.Compras.Leader do
 
   @base_path "/libremarket/compras"
   @leader_path "/libremarket/compras/leader"
+  @interval 2_000
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -345,6 +399,15 @@ defmodule Libremarket.Compras.Leader do
 
   @impl true
   def init(_opts) do
+    # ETS opcional para lecturas rápidas en este nodo
+    case :ets.whereis(:lider_compras) do
+      :undefined ->
+        :ets.new(:lider_compras, [:named_table, :public, read_concurrency: true])
+
+      _ ->
+        :ok
+    end
+
     {:ok, zk} = Libremarket.ZK.connect()
 
     # Aseguramos estructura en ZooKeeper (con reintentos seguros)
@@ -361,7 +424,13 @@ defmodule Libremarket.Compras.Leader do
 
     leader? = compute_leader?(zk, my_znode)
 
+    # Guardar estado inicial de liderazgo
+    :ets.insert(:lider_compras, {:is_leader, leader?})
+
     IO.puts("🟢 Compras.Leader → soy líder? #{leader?} (#{my_znode})")
+
+    # Chequeo periódico de liderazgo
+    Process.send_after(self(), :check_leader, @interval)
 
     {:ok, %{zk: zk, my_znode: my_znode, leader?: leader?}}
   end
@@ -369,6 +438,70 @@ defmodule Libremarket.Compras.Leader do
   @impl true
   def handle_call(:leader?, _from, state) do
     {:reply, state.leader?, state}
+  end
+
+  @impl true
+  def handle_info(:check_leader, %{zk: zk, my_znode: my_znode} = state) do
+    new_state =
+      case :erlzk.get_children(zk, @leader_path) do
+        {:ok, children} ->
+          sorted = Enum.map(children, &List.to_string/1) |> Enum.sort()
+          my_name = List.to_string(my_znode) |> Path.basename()
+          new_leader = hd(sorted) == my_name
+
+          if new_leader != state.leader? do
+            IO.puts("🔄 [Compras.Leader] cambio de liderazgo: #{state.leader?} -> #{new_leader}")
+
+            :ets.insert(:lider_compras, {:is_leader, new_leader})
+            Libremarket.Compras.Server.lider_cambio(new_leader)
+          end
+
+          %{state | leader?: new_leader}
+
+        {:error, _} ->
+          IO.puts("⚠️ [Compras.Leader] No hay líderes → recreando nodo")
+
+          wait_for_zk(zk, @leader_path)
+
+          {:ok, new_znode} =
+            :erlzk.create(zk, @leader_path <> "/nodo-", :ephemeral_sequential)
+
+          new_leader = compute_leader?(zk, new_znode)
+
+          if new_leader != state.leader? do
+            IO.puts(
+              "🔄 [Compras.Leader] Cambio de liderazgo (recreado): ahora líder=#{new_leader}"
+            )
+
+            :ets.insert(:lider_compras, {:is_leader, new_leader})
+            Libremarket.Compras.Server.lider_cambio(new_leader)
+          end
+
+          %{state | my_znode: new_znode, leader?: new_leader}
+      end
+
+    # 🔁 Programar próximo chequeo
+    Process.send_after(self(), :check_leader, @interval)
+
+    {:noreply, new_state}
+  end
+
+  # Determina si este nodo es el líder comparando nombres lexicográficamente
+  defp compute_leader?(zk, my_znode) do
+    {:ok, children} = :erlzk.get_children(zk, @leader_path)
+
+    sorted =
+      children
+      |> Enum.map(&List.to_string/1)
+      |> Enum.sort()
+
+    my_name =
+      my_znode
+      |> List.to_string()
+      |> Path.basename()
+
+    [first | _] = sorted
+    my_name == first
   end
 
   # Garantiza que se puede crear la jerarquía en ZK
@@ -385,22 +518,6 @@ defmodule Libremarket.Compras.Leader do
         :timer.sleep(1_000)
         wait_for_zk(zk, path, retries - 1)
     end
-  end
-
-  # Determina si este nodo es el líder comparando nombres lexicográficamente
-  defp compute_leader?(zk, my_znode) do
-    {:ok, children} = :erlzk.get_children(zk, @leader_path)
-
-    sorted =
-      children
-      |> Enum.map(&List.to_string/1)
-      |> Enum.sort()
-
-    my_name = Path.basename(List.to_string(my_znode))
-
-    [first | _] = sorted
-
-    my_name == first
   end
 end
 
